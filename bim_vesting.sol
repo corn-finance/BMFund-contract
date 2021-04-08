@@ -98,7 +98,7 @@ contract BIMVesting is Ownable, IBIMVesting {
         _;
     }
     
-    // @dev vesting assets are grouped by duration
+    // @dev vesting assets are grouped by day
     struct Round {
         mapping (address => uint256) balances;
         uint startDate;
@@ -110,7 +110,7 @@ contract BIMVesting is Ownable, IBIMVesting {
     uint256 public currentRound = 1;
 
     /// @dev curent locked BIMS    
-    mapping (address => uint256)public  balances;
+    mapping (address => uint256) public balances;
 
     constructor(IBIMToken bimContract, IERC20 bimLockupContract) 
         public {
@@ -134,6 +134,7 @@ contract BIMVesting is Ownable, IBIMVesting {
     /**
      * @dev vest some BIM tokens for an account
      * Contracts that will call vest function(vestable group):
+     * 
      * 1. LPStaking
      * 2. EHCStaking
      */
@@ -162,17 +163,18 @@ contract BIMVesting is Ownable, IBIMVesting {
     }
     
     /**
-     * @dev claim BIMS without penalty
+     * @dev claim unlocked BIMS without penalty
      */
     function claimUnlockedBims() external {
         update();
+        
         uint256 unlockedAmount = checkUnlockedBims(msg.sender);
         balances[msg.sender] -= unlockedAmount;
         BIMContract.safeTransfer(msg.sender, unlockedAmount);
     }
 
     /**
-     * @dev claim BIMS with penalty possibility
+     * @dev claim all BIMS with penalty
      */
     function claimAllBims() external {
         update();
@@ -180,22 +182,34 @@ contract BIMVesting is Ownable, IBIMVesting {
         uint256 unlockedAmount = checkUnlockedBims(msg.sender);
         uint256 lockedAmount = balances[msg.sender].sub(unlockedAmount);
         uint256 penalty = lockedAmount/2;
-        uint256 clearBIMS = balances[msg.sender].sub(penalty);
-        
-        if (clearBIMS > 0) {
-            BIMContract.safeTransfer(msg.sender, clearBIMS);
+        uint256 bimsToClaim = balances[msg.sender].sub(penalty);
+
+        // reset balances in this month(still locked) to 0
+        uint256 monthAgo = block.timestamp - MONTH;
+        for (uint i= currentRound; i>0; i--) {
+            if (rounds[i].startDate < monthAgo) {
+                break;
+            } else {
+                delete rounds[i].balances[msg.sender];
+            }
         }
         
-        // 50% penalty BIM goes to MonthBIMContract
+        // reset user's total balance to 0
+        delete balances[msg.sender];
+        
+        // transfer BIMS to msg.sender        
+        if (bimsToClaim > 0) {
+            BIMContract.safeTransfer(msg.sender, bimsToClaim);
+        }
+        
+        // 50% penalty BIM goes to BIMLockup contract
         if (penalty > 0) {
             BIMContract.safeTransfer(address(BIMLockupContract), penalty);
         }
-        
-        delete balances[msg.sender];
     }
     
     /**
-     * @dev update operation
+     * @dev round update operation
      */
     function update() internal {
         if (block.timestamp.sub(rounds[currentRound].startDate) >= DAY) {
