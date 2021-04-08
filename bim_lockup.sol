@@ -207,6 +207,7 @@ contract BIMLockup is Ownable, ReentrancyGuard {
      * @dev set BIM reward per height
      */
     function setBIMBlockReward(uint256 reward) external onlyOwner {
+        // settle previous rewards round
         updateBIMRound();
         
         // set new block reward
@@ -240,10 +241,10 @@ contract BIMLockup is Ownable, ReentrancyGuard {
         uint newBIMShare;
         if (totalLockedUp > 0 && BIMContract.maxSupply() < BIMContract.totalSupply()) {
             uint blocksToReward = block.number.sub(_lastBIMRewardBlock);
-            uint mintedBIM = BIMBlockReward.mul(blocksToReward);
+            uint bimsToMint = BIMBlockReward.mul(blocksToReward);
     
             // BIM share
-            newBIMShare = mintedBIM.mul(SHARE_MULTIPLIER)
+            newBIMShare = bimsToMint.mul(SHARE_MULTIPLIER)
                                         .div(totalLockedUp);
         }
         
