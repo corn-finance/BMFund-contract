@@ -1,6 +1,6 @@
 Introduction to Bitmine General Hash-Mining Platform
 
-Bitmine General Hash-Mining Platform("Bitmine" for abbreviation) is officially
+Bitmine General Hash-Mining Platform("**Bitmine**" for abbreviation) is officially
 launched in 2021 to bring easy Ether mining experience to cryptocurrency community.
 Bitmine’s mission is to take hash-mining of mainstream cryptocurrencies to the next
 level.
