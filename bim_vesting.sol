@@ -104,7 +104,7 @@ contract BIMVesting is Ownable, IBIMVesting {
         uint startDate;
     }
     
-    /// @dev round index mapping week data
+    /// @dev round index mapping
     mapping (uint => Round) public rounds;
     /// @dev a monotonic increasing index, starts from 1 to avoid underflow
     uint256 public currentRound = 1;
@@ -226,9 +226,12 @@ contract BIMVesting is Ownable, IBIMVesting {
      * @dev round update operation
      */
     function update() internal {
-        if (block.timestamp.sub(rounds[currentRound].startDate) >= DAY) {
-            currentRound++;
-            rounds[currentRound].startDate = rounds[currentRound-1].startDate + DAY;
+        if (block.timestamp.sub(rounds[currentRound].startDate) > DAY) {
+            // compute numDays in order to avoid "NO USER'S INTERACTION AT ALL" in a day.
+            uint numDays = block.timestamp.sub(rounds[currentRound].startDate).div(DAY);
+            
+            currentRound += numDays;
+            rounds[currentRound].startDate = rounds[currentRound-1].startDate + numDays * DAY;
         }
     }
 }
