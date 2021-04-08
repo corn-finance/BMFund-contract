@@ -106,8 +106,6 @@ contract BIMVesting is Ownable, IBIMVesting {
     
     /// @dev round index mapping week data
     mapping (uint => Round) public rounds;
-    /// @dev mark holders' highest settled round.
-    mapping (address => uint) public settledRound;
     /// @dev a monotonic increasing index, starts from 1 to avoid underflow
     uint256 public currentRound = 1;
 
@@ -135,6 +133,9 @@ contract BIMVesting is Ownable, IBIMVesting {
 
     /**
      * @dev vest some BIM tokens for an account
+     * Contracts that will call vest function(vestable group):
+     * 1. LPStaking
+     * 2. EHCStaking
      */
     function vest(address account, uint256 amount) external override onlyVestableGroup {
         update();
@@ -144,16 +145,16 @@ contract BIMVesting is Ownable, IBIMVesting {
     }
 
     /**
-     * @dev get current claimable BIMS without penalty
+     * @dev check current claimable BIMS without penalty
      */
-    function getUnlockedBims() external view returns(uint256) {
+    function checkUnlockedBims(address account) public view returns(uint256) {
         uint256 monthAgo = block.timestamp - MONTH;
         uint256 lockedAmount;
-        for (uint i= currentRound; i>0 && i>settledRound[msg.sender]; i--) {
+        for (uint i= currentRound; i>0; i--) {
             if (rounds[i].startDate < monthAgo) {
-                return balances[msg.sender].sub(lockedAmount);
+                return balances[account].sub(lockedAmount);
             } else {
-                lockedAmount += rounds[i].balances[msg.sender];
+                lockedAmount += rounds[i].balances[account];
             }
         }
     }
@@ -163,48 +164,24 @@ contract BIMVesting is Ownable, IBIMVesting {
      */
     function claimUnlockedBims() external {
         update();
-
-        uint256 monthAgo = block.timestamp - MONTH;
-        uint256 lockedAmount;
-        for (uint i= currentRound; i>0 && i>settledRound[msg.sender]; i--) {
-            if (rounds[i].startDate <= monthAgo) {
-                settledRound[msg.sender] = i;
-                break;
-            } else {
-                lockedAmount += rounds[i].balances[msg.sender];
-            }
-        }
-        
-        uint256 unlockedAmount = balances[msg.sender].sub(lockedAmount);
-        if (unlockedAmount > 0) {
-            // modify
-            balances[msg.sender] = lockedAmount;
-            // transfer unlocked amount
-            BIMContract.safeTransfer(msg.sender, unlockedAmount);
-        }
+        uint256 unlockedAmount = checkUnlockedBims(msg.sender);
+        balances[msg.sender] -= unlockedAmount;
+        BIMContract.safeTransfer(msg.sender, unlockedAmount);
     }
 
     /**
      * @dev claim BIMS with penalty possibility
      */
-    function claimAllBims(address account) external {
+    function claimAllBims() external {
         update();
         
-        uint256 monthAgo = block.timestamp - MONTH;
-        uint256 lockedAmount;
-        for (uint i= currentRound; i>0 && i>settledRound[account]; i--) {
-            if (rounds[i].startDate <= monthAgo) {
-                break;
-            } else {
-                lockedAmount += rounds[i].balances[account];
-            }
-        }
-
+        uint256 unlockedAmount = checkUnlockedBims(msg.sender);
+        uint256 lockedAmount = balances[msg.sender].sub(unlockedAmount);
         uint256 penalty = lockedAmount/2;
-        uint256 totalBIM = balances[account].sub(penalty);
+        uint256 clearBIMS = balances[msg.sender].sub(penalty);
         
-        if (totalBIM > 0) {
-            BIMContract.safeTransfer(msg.sender, totalBIM);
+        if (clearBIMS > 0) {
+            BIMContract.safeTransfer(msg.sender, clearBIMS);
         }
         
         // 50% penalty BIM goes to MonthBIMContract
@@ -212,10 +189,7 @@ contract BIMVesting is Ownable, IBIMVesting {
             BIMContract.safeTransfer(address(BIMLockupContract), penalty);
         }
         
-        delete balances[account];
-        
-        // mark settledRound to last day
-        settledRound[account] = currentRound - 1;
+        delete balances[msg.sender];
     }
     
     /**
