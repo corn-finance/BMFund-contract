@@ -135,6 +135,7 @@ contract EHCStaking is Ownable, ReentrancyGuard {
         
         // transfer EHC from msg.sender
         EHCTokenContract.safeTransferFrom(msg.sender, address(this), amount);
+        
         _balances[msg.sender] += amount;
         _totalStaked += amount;
     }
@@ -158,7 +159,7 @@ contract EHCStaking is Ownable, ReentrancyGuard {
     }
     
     /**
-     * @dev claim all
+     * @dev claim ethers & bims
      */
     function claim() external {
         claimEthers();
@@ -179,7 +180,7 @@ contract EHCStaking is Ownable, ReentrancyGuard {
         // transfer ETH to sender
         ETHContract.safeTransfer(msg.sender, ethers);
         
-        // update last ETH balance due to transfer
+        // IMPORTANT: update ETH balance due to transfer
         _lastETHBalance = ETHContract.balanceOf(address(this));
     }
     
@@ -213,7 +214,7 @@ contract EHCStaking is Ownable, ReentrancyGuard {
     }
     
     /**
-     * @dev set BIM reward per height
+     * @dev set BIM reward per block
      */
     function setBIMBlockReward(uint256 reward) external onlyOwner {
         // settle previous BIM round first
@@ -224,7 +225,7 @@ contract EHCStaking is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice sum unclaimed rewards;
+     * @notice sum unclaimed ether rewards;
      */
     function checkETHReward(address account) external view returns(uint256 ethers) {
         // reward = settled + unsettled + balanceDiff + new mined
@@ -247,7 +248,7 @@ contract EHCStaking is Ownable, ReentrancyGuard {
     }
     
     /**
-     * @notice sum unclaimed rewards;
+     * @notice sum unclaimed BIM rewards;
      */
     function checkBIMReward(address account) external view returns(uint256 bim) {
         // reward = settled + unsettled + newMined
@@ -257,10 +258,10 @@ contract EHCStaking is Ownable, ReentrancyGuard {
         uint newBIMShare;
         if (_totalStaked > 0 && BIMContract.maxSupply() < BIMContract.totalSupply()) {
             uint blocksToReward = block.number.sub(_lastBIMRewardBlock);
-            uint mintedBIM = BIMBlockReward.mul(blocksToReward);
+            uint bimsToMint = BIMBlockReward.mul(blocksToReward);
     
             // BIM share
-            newBIMShare = mintedBIM.mul(SHARE_MULTIPLIER)
+            newBIMShare = bimsToMint.mul(SHARE_MULTIPLIER)
                                         .div(_totalStaked);
         }
         
@@ -270,25 +271,25 @@ contract EHCStaking is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev settle a staker
+     * @dev settle a staker's ethers
      */
     function settleStakerEthers(address account) internal {
-        // update reward snapshot
+        // update ethers snapshot
         updateEthersRound();
         
         // settle this account
         uint lastSettledRound = _settledETHRounds[account];
         uint newSettledRound = _currentETHRound - 1;
         
-        // round rewards
+        // round ether rewards
         uint roundRewards = _accETHShares[newSettledRound].sub(_accETHShares[lastSettledRound]) 
                                 .mul(_balances[account])
                                 .div(SHARE_MULTIPLIER);  // remember to div by SHARE_MULTIPLIER    
         
-        // update reward balance
+        // update ether balance
         _ethBalance[account] += roundRewards;
         
-        // mark new settled rewards round
+        // mark new settled ethers rewards round
         _settledETHRounds[account] = newSettledRound;
     }
          
@@ -301,7 +302,7 @@ contract EHCStaking is Ownable, ReentrancyGuard {
             return;
         }
         
-        // trigger EHCTokenContract to transfer ETH mining rewards to this contract
+        // trigger EHCTokenContract to transfer ethers to this contract
         EHCTokenContract.distribute();
         
         // check diff with previous ETH balance
@@ -321,7 +322,7 @@ contract EHCStaking is Ownable, ReentrancyGuard {
         // next round setting                                 
         _currentETHRound++;
         
-        // update last ETH balance
+        // update ETH balance
         _lastETHBalance = ETHContract.balanceOf(address(this));
     }
     

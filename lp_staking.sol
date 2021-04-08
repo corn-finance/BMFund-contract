@@ -113,7 +113,7 @@ contract LPStaking is Ownable, ReentrancyGuard {
      * @dev withdraw LP token previously deposited
      */
     function withdraw(uint256 amount) external {
-        require(amount <= _balances[msg.sender], "amount exceeded");
+        require(amount <= _balances[msg.sender], "balance exceeded");
         
         settleStakerBIMReward(msg.sender);
                 
