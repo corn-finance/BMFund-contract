@@ -289,7 +289,7 @@ contract BIMLockup is Ownable, ReentrancyGuard {
     }
     
     /**
-     * @dev update accumulated BIM block reward until current block
+     * @dev update accumulated BIM block reward until current block, and also penalty received
      */
     function updateBIMRound() internal {
         // postpone BIM rewarding if there is none locked-up
