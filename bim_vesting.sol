@@ -69,329 +69,162 @@ contract Ownable is Context {
 }
 
 /**
- * @dev EHC Staking contract
+ * @dev BIM Vesting contract
  */
-contract EHCStaking is Ownable, ReentrancyGuard {
-    using SafeERC20 for IERC20;
-    using SafeERC20 for IEHCToken;
-    using SafeERC20 for IBIMToken;
+contract BIMVesting is Ownable, IBIMVesting {
     using SafeMath for uint;
+    using SafeERC20 for IBIMToken;
+
+    uint256 constant DAY = 86400;
+    uint256 constant MONTH = DAY * 30;
     
-    uint256 internal constant SHARE_MULTIPLIER = 1e18; // share multiplier to avert division underflow
-    
-    IERC20 public ETHContract;
     IBIMToken public BIMContract;
-    IBIMVesting public BIMVestingContract;
-    IEHCToken public EHCTokenContract; // the EHC token contract
-    
-    mapping (address => uint256) private _balances; // tracking staker's value
-    uint256 private _totalStaked; // track total staked value
-    
-    /**
-     * @dev ETH Rewarding
-     */
-    mapping (address => uint256) internal _ethBalance;  // tracking staker's claimable eth
-    /// @dev round index mapping to accumulate sharea.
-    mapping (uint => uint) private _accETHShares;
-    /// @dev mark holders' highest settled round.
-    mapping (address => uint) private _settledETHRounds;
-    /// @dev a monotonic increasing round index, STARTS FROM 1
-    uint256 private _currentETHRound = 1;
-    /// @dev last ETH balance
-    uint256 private _lastETHBalance;
-    
-    /**
-     * @dev BIM Rewarding
-     */
-    mapping (address => uint256) internal _bimBalance;  // tracking staker's claimable bim
-    /// @dev round index mapping to accumulate sharea.
-    mapping (uint => uint) private _accBIMShares;
-    /// @dev mark holders' highest settled round.
-    mapping (address => uint) private _settledBIMRounds;
-    /// @dev a monotonic increasing round index, STARTS FROM 1
-    uint256 private _currentBIMRound = 1;
-    // @dev last BIM reward block
-    uint256 private _lastBIMRewardBlock = block.number;
-    // @dev BIM rewards per block
-    uint256 public BIMBlockReward = 0;
+    IERC20 public BIMLockupContract;
 
+    /**
+     * @dev Emitted when an account is set vestable
+     */
+    event Vestable(address account);
+    /**
+     * @dev Emitted when an account is set unvestable
+     */
+    event Unvestable(address account);
 
-    constructor(IERC20 ethContract, IBIMToken bimContract, IEHCToken ehcToken, IBIMVesting bimVesting) 
+    // @dev vestable group
+    mapping(address => bool) public vestableGroup;
+    
+    modifier onlyVestableGroup() {
+        require(vestableGroup[msg.sender], "not in vestable group");
+        _;
+    }
+    
+    // @dev vesting assets are grouped by duration
+    struct Round {
+        mapping (address => uint256) balances;
+        uint startDate;
+    }
+    
+    /// @dev round index mapping week data
+    mapping (uint => Round) public rounds;
+    /// @dev mark holders' highest settled round.
+    mapping (address => uint) public settledRound;
+    /// @dev a monotonic increasing index, starts from 1 to avoid underflow
+    uint256 public currentRound = 1;
+
+    /// @dev curent locked BIMS    
+    mapping (address => uint256)public  balances;
+
+    constructor(IBIMToken bimContract, IERC20 bimLockupContract) 
         public {
-        ETHContract = ethContract;
         BIMContract = bimContract;
-        EHCTokenContract = ehcToken;
-        BIMVestingContract = bimVesting;
-        _lastETHBalance = ethContract.balanceOf(address(this));
+        BIMLockupContract = bimLockupContract;
+        rounds[0].startDate = block.timestamp;
     }
     
     /**
-     * @dev deposit EHC
+     * @dev set or remove address to vestable group
      */
-    function deposit(uint256 amount) external {
-        // settle previous rewards
-        settleStakerEthers(msg.sender);
-        settleStakerBIM(msg.sender);
-        
-        // transfer EHC from msg.sender
-        EHCTokenContract.safeTransferFrom(msg.sender, address(this), amount);
-        _balances[msg.sender] += amount;
-        _totalStaked += amount;
-    }
-    
-    /**
-     * @dev withdraw EHC
-     */
-    function withdraw(uint256 amount) external {
-        require(amount <= _balances[msg.sender], "balance exceeded");
-        
-        // settle previous rewards
-        settleStakerEthers(msg.sender);
-        settleStakerBIM(msg.sender);
-        
-        // modifiy
-        _balances[msg.sender] -= amount;
-        _totalStaked -= amount;
-        
-        // transfer EHC back to msg.sender
-        EHCTokenContract.safeTransfer(msg.sender, amount);
-    }
-    
-    /**
-     * @dev claim all
-     */
-    function claim() external {
-        claimEthers();
-        claimBIM();
-    }
-    
-    /**
-     * @dev claim ethers
-     */
-    function claimEthers() public {
-        // settle previous rewards
-        settleStakerEthers(msg.sender);
-        
-        // balance modification
-        uint ethers = _ethBalance[msg.sender];
-        delete _ethBalance[msg.sender]; // zero balance
-
-        // transfer ETH to sender
-        ETHContract.safeTransfer(msg.sender, ethers);
-        
-        // update last ETH balance due to transfer
-        _lastETHBalance = ETHContract.balanceOf(address(this));
-    }
-    
-    /**
-     * @dev claim BIMS
-     */
-    function claimBIM() public {
-        // settle previous rewards
-        settleStakerBIM(msg.sender);
-        
-        // BIM balance modification
-        uint bims = _bimBalance[msg.sender];
-        delete _bimBalance[msg.sender]; // zero balance
-        
-        // transfer BIM
-        BIMContract.safeTransfer(address(BIMVestingContract), bims);
-    
-        // vest new minted BIM
-        BIMVestingContract.vest(msg.sender, bims);
-    }
-     
-    /**
-     * @dev return value staked for an account
-     */
-    function numStaked(address account) external view returns (uint256) {
-        return _balances[account];
+    function setVestable(address account, bool allow) external onlyOwner {
+        vestableGroup[account] = allow;
+        if (allow) {
+            emit Vestable(account);
+        }  else {
+            emit Unvestable(account);
+        }
     }
 
     /**
-     * @dev return total staked value
+     * @dev vest some BIM tokens for an account
      */
-    function totalStaked() external view returns (uint256) {
-        return _totalStaked;
-    }
-    
-    /**
-     * @dev set BIM reward per height
-     */
-    function setBIMBlockReward(uint256 reward) external onlyOwner {
-        // settle previous BIM round first
-        updateBIMRound();
-        
-        // set new block reward
-        BIMBlockReward = reward;
+    function vest(address account, uint256 amount) external override onlyVestableGroup {
+        update();
+
+        rounds[currentRound].balances[account] += amount;
+        balances[account] += amount;
     }
 
     /**
-     * @notice sum unclaimed rewards;
+     * @dev get current claimable BIMS without penalty
      */
-    function checkETHReward(address account) external view returns(uint256 ethers) {
-        // reward = settled + unsettled + balanceDiff + new mined
-        uint lastSettledRound = _settledETHRounds[account];
-        uint unsettledShare = _accETHShares[_currentETHRound-1].sub(_accETHShares[lastSettledRound]);
-        
-        uint balanceDiff = ETHContract.balanceOf(address(this)).sub(_lastETHBalance);
-        uint newETHRewards = ETHContract.balanceOf(address(EHCTokenContract)).mul(70).div(100);
-        
-        uint newShare;
-        if (_totalStaked > 0) {
-            newShare = newETHRewards.add(balanceDiff)
-                                    .mul(SHARE_MULTIPLIER)
-                                    .div(_totalStaked);
+    function getUnlockedBims() external view returns(uint256) {
+        uint256 monthAgo = block.timestamp - MONTH;
+        uint256 lockedAmount;
+        for (uint i= currentRound; i>0 && i>settledRound[msg.sender]; i--) {
+            if (rounds[i].startDate < monthAgo) {
+                return balances[msg.sender].sub(lockedAmount);
+            } else {
+                lockedAmount += rounds[i].balances[msg.sender];
+            }
         }
-        
-        return _ethBalance[account] + (unsettledShare + newShare)
-                                            .mul(_balances[account])
-                                            .div(SHARE_MULTIPLIER);  // remember to div by SHARE_MULTIPLIER;
     }
     
     /**
-     * @notice sum unclaimed rewards;
+     * @dev claim BIMS without penalty
      */
-    function checkBIMReward(address account) external view returns(uint256 bim) {
-        // reward = settled + unsettled + newMined
-        uint lastSettledRound = _settledBIMRounds[account];
-        uint unsettledShare = _accBIMShares[_currentBIMRound-1].sub(_accBIMShares[lastSettledRound]);
-        
-        uint newBIMShare;
-        if (_totalStaked > 0 && BIMContract.maxSupply() < BIMContract.totalSupply()) {
-            uint blocksToReward = block.number.sub(_lastBIMRewardBlock);
-            uint mintedBIM = BIMBlockReward.mul(blocksToReward);
-    
-            // BIM share
-            newBIMShare = mintedBIM.mul(SHARE_MULTIPLIER)
-                                        .div(_totalStaked);
+    function claimUnlockedBims() external {
+        update();
+
+        uint256 monthAgo = block.timestamp - MONTH;
+        uint256 lockedAmount;
+        for (uint i= currentRound; i>0 && i>settledRound[msg.sender]; i--) {
+            if (rounds[i].startDate <= monthAgo) {
+                settledRound[msg.sender] = i;
+                break;
+            } else {
+                lockedAmount += rounds[i].balances[msg.sender];
+            }
         }
         
-        return _bimBalance[account] + (unsettledShare + newBIMShare)
-                                            .mul(_balances[account])
-                                            .div(SHARE_MULTIPLIER);  // remember to div by SHARE_MULTIPLIER;
+        uint256 unlockedAmount = balances[msg.sender].sub(lockedAmount);
+        if (unlockedAmount > 0) {
+            // modify
+            balances[msg.sender] = lockedAmount;
+            // transfer unlocked amount
+            BIMContract.safeTransfer(msg.sender, unlockedAmount);
+        }
     }
 
     /**
-     * @dev settle a staker
+     * @dev claim BIMS with penalty possibility
      */
-    function settleStakerEthers(address account) internal {
-        // update reward snapshot
-        updateEthersRound();
+    function claimAllBims(address account) external {
+        update();
         
-        // settle this account
-        uint lastSettledRound = _settledETHRounds[account];
-        uint newSettledRound = _currentETHRound - 1;
+        uint256 monthAgo = block.timestamp - MONTH;
+        uint256 lockedAmount;
+        for (uint i= currentRound; i>0 && i>settledRound[account]; i--) {
+            if (rounds[i].startDate <= monthAgo) {
+                break;
+            } else {
+                lockedAmount += rounds[i].balances[account];
+            }
+        }
+
+        uint256 penalty = lockedAmount/2;
+        uint256 totalBIM = balances[account].sub(penalty);
         
-        // round rewards
-        uint roundRewards = _accETHShares[newSettledRound].sub(_accETHShares[lastSettledRound]) 
-                                .mul(_balances[account])
-                                .div(SHARE_MULTIPLIER);  // remember to div by SHARE_MULTIPLIER    
-        
-        // update reward balance
-        _ethBalance[account] += roundRewards;
-        
-        // mark new settled rewards round
-        _settledETHRounds[account] = newSettledRound;
-    }
-         
-     /**
-     * @dev update accumulated reward until current block
-     */
-    function updateEthersRound() internal nonReentrant {
-        // postpone BIM rewarding if there is none staker
-        if (_totalStaked == 0) {
-            return;
+        if (totalBIM > 0) {
+            BIMContract.safeTransfer(msg.sender, totalBIM);
         }
         
-        // trigger EHCTokenContract to transfer ETH mining rewards to this contract
-        EHCTokenContract.distribute();
-        
-        // check diff with previous ETH balance
-        uint balanceDiff = ETHContract.balanceOf(address(this)).sub(_lastETHBalance);
-        if (balanceDiff == 0) {
-            return;
+        // 50% penalty BIM goes to MonthBIMContract
+        if (penalty > 0) {
+            BIMContract.safeTransfer(address(BIMLockupContract), penalty);
         }
         
-        // ethers share
-        uint roundShare = balanceDiff
-                            .mul(SHARE_MULTIPLIER)
-                            .div(_totalStaked);
-            
-        // accumulate share
-        _accETHShares[_currentETHRound] = roundShare.add(_accETHShares[_currentETHRound-1]); 
-       
-        // next round setting                                 
-        _currentETHRound++;
+        delete balances[account];
         
-        // update last ETH balance
-        _lastETHBalance = ETHContract.balanceOf(address(this));
+        // mark settledRound to last day
+        settledRound[account] = currentRound - 1;
     }
     
     /**
-     * @dev settle a staker
+     * @dev update operation
      */
-    function settleStakerBIM(address account) internal {
-        updateBIMRound();
-        
-         // settle this account
-        uint lastSettledRound = _settledBIMRounds[account];
-        uint newSettledRound = _currentBIMRound - 1;
-        
-        // round BIM
-        uint roundBIM = _accBIMShares[newSettledRound].sub(_accBIMShares[lastSettledRound])
-                                .mul(_balances[account])
-                                .div(SHARE_MULTIPLIER);  // remember to div by SHARE_MULTIPLIER    
-        
-        // update BIM balance
-        _bimBalance[account] += roundBIM;
-        
-        // mark new settled BIM round
-        _settledBIMRounds[account] = newSettledRound;
-    }
-    
-    /**
-     * @dev update accumulated BIM block reward until current block
-     */
-    function updateBIMRound() internal nonReentrant {
-        // skip round changing in the same block
-        if (_lastBIMRewardBlock == block.number) {
-            return;
+    function update() internal {
+        if (block.timestamp.sub(rounds[currentRound].startDate) >= DAY) {
+            currentRound++;
+            rounds[currentRound].startDate = rounds[currentRound-1].startDate + DAY;
         }
-    
-        // postpone BIM rewarding if there is none staker
-        if (_totalStaked == 0) {
-            return;
-        }
-        
-        // has reached maximum mintable BIM 
-        if (BIMContract.maxSupply() == BIMContract.totalSupply()) {
-            return;
-        }
-
-        // mint BIM for (_lastRewardBlock, block.number]
-        uint blocksToReward = block.number.sub(_lastBIMRewardBlock);
-        uint mintedBIM = BIMBlockReward.mul(blocksToReward);
-        uint remain = BIMContract.maxSupply().sub(BIMContract.totalSupply());
-        // cap to BIM max supply
-        if (remain < mintedBIM) {
-            mintedBIM = remain;
-        }
-        
-        // BIM mint
-        BIMContract.mint(address(this), mintedBIM);
-
-        // BIM share
-        uint roundBIMShare = mintedBIM.mul(SHARE_MULTIPLIER)
-                                    .div(_totalStaked);
-                                
-        // mark block rewarded;
-        _lastBIMRewardBlock = block.number;
-            
-        // accumulate BIM share
-        _accBIMShares[_currentBIMRound] = roundBIMShare.add(_accBIMShares[_currentBIMRound-1]); 
-       
-        // next round setting                                 
-        _currentBIMRound++;
     }
 }

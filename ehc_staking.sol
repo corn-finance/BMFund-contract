@@ -194,9 +194,6 @@ contract EHCStaking is Ownable, ReentrancyGuard {
         uint bims = _bimBalance[msg.sender];
         delete _bimBalance[msg.sender]; // zero balance
         
-        // transfer BIM
-        BIMContract.safeTransfer(address(BIMVestingContract), bims);
-    
         // vest new minted BIM
         BIMVestingContract.vest(msg.sender, bims);
     }
@@ -371,18 +368,18 @@ contract EHCStaking is Ownable, ReentrancyGuard {
 
         // mint BIM for (_lastRewardBlock, block.number]
         uint blocksToReward = block.number.sub(_lastBIMRewardBlock);
-        uint mintedBIM = BIMBlockReward.mul(blocksToReward);
+        uint bimsToMint = BIMBlockReward.mul(blocksToReward);
         uint remain = BIMContract.maxSupply().sub(BIMContract.totalSupply());
         // cap to BIM max supply
-        if (remain < mintedBIM) {
-            mintedBIM = remain;
+        if (remain < bimsToMint) {
+            bimsToMint = remain;
         }
         
-        // BIM mint
-        BIMContract.mint(address(this), mintedBIM);
+        // BIM mint to BIMVestingContract
+        BIMContract.mint(address(BIMVestingContract), bimsToMint);
 
         // BIM share
-        uint roundBIMShare = mintedBIM.mul(SHARE_MULTIPLIER)
+        uint roundBIMShare = bimsToMint.mul(SHARE_MULTIPLIER)
                                     .div(_totalStaked);
                                 
         // mark block rewarded;

@@ -69,17 +69,20 @@ contract Ownable is Context {
 }
 
 /**
- * @dev BIM Lockup contract
+ * @dev LP Staking Contract for LP token
  */
-contract BIMLockup is Ownable, ReentrancyGuard {
+contract LPStaking is Ownable, ReentrancyGuard {
     using SafeMath for uint;
     using SafeERC20 for IBIMToken;
+    using SafeERC20 for IERC20;
 
     uint256 constant DAY = 86400;
     uint256 constant WEEK = DAY * 7;
     uint256 constant MONTH = DAY * 30;
     
     IBIMToken public BIMContract;
+    IERC20 public LPToken;
+    IBIMVesting public BIMVestingContract;
     
     // @dev vesting assets are grouped by duration
     struct Round {
@@ -97,51 +100,28 @@ contract BIMLockup is Ownable, ReentrancyGuard {
     uint256 public totalLockedUp;
     
 
-    constructor(IBIMToken bimContract) 
+    constructor(IBIMToken bimContract, IERC20 lpToken, IBIMVesting bimVesting) 
         public {
         BIMContract = bimContract;
+        LPToken = lpToken;
+        BIMVestingContract = bimVesting;
         rounds[0].startDate = block.timestamp; // create an ended week
     }
 
     /**
-     * @dev function called before every user's interaction
-     */
-    function beforeBalanceChange() internal nonReentrant {
-        // create a new weekly round for deposit if recent week ends.
-        if (block.timestamp.sub(rounds[currentRound].startDate) >= 0) {
-            currentRound++;
-            // new week starts
-            rounds[currentRound].startDate = rounds[currentRound-1].startDate + WEEK;
-        }
-        
-        // settle the caller before any lockup balance changes
-        settleStakerBIMReward(msg.sender);
-    }
-    
-    /**
-     * @dev function called after balance changes
-     */
-    function afterBalanceChange() internal {
-        // update BIM balance after deposit
-        _lastBIMBalance = BIMContract.balanceOf(address(this));
-    }
-    
-    /**
-     * @dev deposit BIM
+     * @dev deposit LP token
      */
     function deposit(uint256 amount) external {
-        beforeBalanceChange();
+        settleStakerBIMReward(msg.sender);
                 
-        // transfer BIM from msg.sender
-        BIMContract.safeTransferFrom(msg.sender, address(this), amount);
+        // transfer LP token from msg.sender
+        LPToken.safeTransferFrom(msg.sender, address(this), amount);
         // group deposits in current week to avert gas consumption in withdraw
         rounds[currentRound].balances[msg.sender] += amount;
         // modify sender's balance
         balances[msg.sender] += amount;
         // sum up total locked BIMs
         totalLockedUp += amount;
-
-        afterBalanceChange();
     }
         
     /**
@@ -167,7 +147,7 @@ contract BIMLockup is Ownable, ReentrancyGuard {
      * @dev withdraw BIM previously deposited
      */
     function withdraw() external {
-        beforeBalanceChange();
+        settleStakerBIMReward(msg.sender);
                 
         uint256 lockedAmount = checkUnlocked(msg.sender);
         // unlocked = balance - locked
@@ -178,9 +158,7 @@ contract BIMLockup is Ownable, ReentrancyGuard {
         totalLockedUp -= unlockedAmount;
         
         // transfer unlocked amount
-        BIMContract.safeTransfer(msg.sender, unlockedAmount);
-        
-        afterBalanceChange();
+        LPToken.safeTransfer(msg.sender, unlockedAmount);
     }
 
     /**
@@ -208,28 +186,25 @@ contract BIMLockup is Ownable, ReentrancyGuard {
      * @dev set BIM reward per height
      */
     function setBIMBlockReward(uint256 reward) external onlyOwner {
-        beforeBalanceChange();
+        // settle previous BIM round first
+        updateBIMRound();
         
         // set new block reward
         BIMBlockReward = reward;
-        
-        afterBalanceChange();
     }
     
     /**
-     * @dev claim bonus BIMs
+     * @dev claim bonus BIMs with redirect BIMS to IBIM
      */
     function claimBIMReward() external {
-        beforeBalanceChange();
+        settleStakerBIMReward(msg.sender);
         
         // BIM balance modification
         uint bims = _bimBalance[msg.sender];
         delete _bimBalance[msg.sender]; // zero balance
-        
-        // transfer BIM
-        BIMContract.safeTransfer(msg.sender, bims);
-        
-        afterBalanceChange();
+
+        // vest new minted BIM
+        BIMVestingContract.vest(msg.sender, bims);
     }
     
     /**
@@ -281,43 +256,39 @@ contract BIMLockup is Ownable, ReentrancyGuard {
      * @dev update accumulated BIM block reward until current block
      */
     function updateBIMRound() internal {
-        // postpone BIM rewarding if there is none locked-up
+         // skip round changing in the same block
+        if (_lastBIMRewardBlock == block.number) {
+            return;
+        }
+    
+        // postpone BIM rewarding if there is none staker
         if (totalLockedUp == 0) {
             return;
         }
         
         // has reached maximum mintable BIM 
-        if (BIMContract.maxSupply() < BIMContract.totalSupply()) {
-            // mint BIM for (_lastRewardBlock, block.number]
-            uint blocksToReward = block.number.sub(_lastBIMRewardBlock);
-            uint bimsToMint = BIMBlockReward.mul(blocksToReward);
-            uint remain = BIMContract.maxSupply().sub(BIMContract.totalSupply());
-            // cap to BIM max supply
-            if (remain < bimsToMint) {
-                bimsToMint = remain;
-            }
-            
-            if (bimsToMint > 0) {
-                // BIM mint
-                BIMContract.mint(address(this), bimsToMint);
-            }
-        }
-        
-        // compute BIM diff with _lastBIMBalance, this also distributes BIM-penalty received un-noticed.
-        uint bimDiff = BIMContract.balanceOf(address(this)).sub(_lastBIMBalance);
-        if (bimDiff == 0) {
+        if (BIMContract.maxSupply() == BIMContract.totalSupply()) {
             return;
         }
 
+        // mint BIM for (_lastRewardBlock, block.number]
+        uint blocksToReward = block.number.sub(_lastBIMRewardBlock);
+        uint bimsToMint = BIMBlockReward.mul(blocksToReward);
+        uint remain = BIMContract.maxSupply().sub(BIMContract.totalSupply());
+        // cap to BIM max supply
+        if (remain < bimsToMint) {
+            bimsToMint = remain;
+        }
+        
+        // BIM mint to BIMVestingContract
+        BIMContract.mint(address(BIMVestingContract), bimsToMint);
+
         // BIM share
-        uint roundBIMShare = bimDiff.mul(SHARE_MULTIPLIER)
+        uint roundBIMShare = bimsToMint.mul(SHARE_MULTIPLIER)
                                     .div(totalLockedUp);
                                 
         // mark block rewarded;
         _lastBIMRewardBlock = block.number;
-        
-        // update BIM balance
-        _lastBIMBalance = BIMContract.balanceOf(address(this));
             
         // accumulate BIM share
         _accBIMShares[_currentBIMRound] = roundBIMShare.add(_accBIMShares[_currentBIMRound-1]); 
