@@ -110,7 +110,7 @@ contract BIMVesting is Ownable, IBIMVesting {
     uint256 public currentRound = 1;
 
     /// @dev curent locked BIMS    
-    mapping (address => uint256) public balances;
+    mapping (address => uint256) private balances;
 
     constructor(IBIMToken bimContract, IERC20 bimLockupContract) 
         public {
@@ -144,11 +144,18 @@ contract BIMVesting is Ownable, IBIMVesting {
         rounds[currentRound].balances[account] += amount;
         balances[account] += amount;
     }
-
+    
     /**
-     * @dev check current claimable BIMS without penalty
+     * @dev check total vested bims
      */
-    function checkUnlockedBims(address account) public view returns(uint256) {
+    function checkVestedBims(address account) public view returns(uint256) {
+        return balances[account];
+    }
+    
+    /**
+     * @dev check current locked BIMS
+     */
+    function checkLockedBims(address account) public view returns(uint256) {
         uint256 monthAgo = block.timestamp - MONTH;
         uint256 lockedAmount;
         for (uint i= currentRound; i>0; i--) {
@@ -159,6 +166,14 @@ contract BIMVesting is Ownable, IBIMVesting {
             }
         }
         
+        return lockedAmount;
+    }
+
+    /**
+     * @dev check current claimable BIMS without penalty
+     */
+    function checkUnlockedBims(address account) public view returns(uint256) {
+        uint256 lockedAmount = checkLockedBims(account);
         return balances[account].sub(lockedAmount);
     }
     
@@ -179,8 +194,7 @@ contract BIMVesting is Ownable, IBIMVesting {
     function claimAllBims() external {
         update();
         
-        uint256 unlockedAmount = checkUnlockedBims(msg.sender);
-        uint256 lockedAmount = balances[msg.sender].sub(unlockedAmount);
+        uint256 lockedAmount = checkLockedBims(msg.sender);
         uint256 penalty = lockedAmount/2;
         uint256 bimsToClaim = balances[msg.sender].sub(penalty);
 
