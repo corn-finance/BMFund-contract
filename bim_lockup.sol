@@ -98,7 +98,6 @@ contract BIMLockup is Ownable, ReentrancyGuard {
     /// @dev total locked-up
     uint256 public totalLockedUp;
     
-
     constructor(IBIMToken bimContract) 
         public {
         BIMContract = bimContract;
@@ -124,7 +123,7 @@ contract BIMLockup is Ownable, ReentrancyGuard {
      * @dev function called after balance changes
      */
     function afterBalanceChange() internal {
-        // update BIM balance after deposit or withdraw
+        // update contract's BIM balance after deposit or withdraw
         _lastBIMBalance = BIMContract.balanceOf(address(this));
     }
     
@@ -201,7 +200,7 @@ contract BIMLockup is Ownable, ReentrancyGuard {
     uint256 private _lastBIMRewardBlock = block.number;
     // @dev BIM rewards per block
     uint256 public BIMBlockReward = 0;
-    /// @dev last BIM balance
+    /// @dev lastest contract's BIM balance
     uint256 private _lastBIMBalance;
     
     uint256 internal constant SHARE_MULTIPLIER = 1e18; // share multiplier to avert division underflow
@@ -327,7 +326,7 @@ contract BIMLockup is Ownable, ReentrancyGuard {
         uint roundBIMShare = bimDiff.mul(SHARE_MULTIPLIER)
                                     .div(totalLockedUp);
         
-        // update BIM balance
+        // update contract's BIM balance
         _lastBIMBalance = BIMContract.balanceOf(address(this));
             
         // accumulate BIM share
