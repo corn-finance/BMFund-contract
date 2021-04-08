@@ -92,8 +92,10 @@ contract BIMLockup is Ownable, ReentrancyGuard {
     /// @dev a monotonic increasing index, starts from 1 to avoid underflow
     uint256 public currentRound = 1;
 
-    /// @dev curent total locked BIMS, rewards will be distributed pro rata based on balances
+    /// @dev lockup balance
     mapping (address => uint256) public balances;
+    
+    /// @dev total locked-up
     uint256 public totalLockedUp;
     
 
@@ -187,7 +189,8 @@ contract BIMLockup is Ownable, ReentrancyGuard {
      * ----------------------------------------------------------------------------------
      */
      
-    mapping (address => uint256) internal _bimBalance;  // tracking staker's claimable bim
+    /// @dev bim reward balance
+    mapping (address => uint256) internal _bimBalance;  
     /// @dev round index mapping to accumulate sharea.
     mapping (uint => uint) private _accBIMShares;
     /// @dev mark holders' highest settled round.
