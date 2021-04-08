@@ -122,7 +122,7 @@ contract BIMLockup is Ownable, ReentrancyGuard {
      * @dev function called after balance changes
      */
     function afterBalanceChange() internal {
-        // update BIM balance after deposit
+        // update BIM balance after deposit or withdraw
         _lastBIMBalance = BIMContract.balanceOf(address(this));
     }
     
@@ -154,27 +154,27 @@ contract BIMLockup is Ownable, ReentrancyGuard {
         uint256 lockedAmount;
         for (uint i= currentRound; i>0; i--) {
             if (rounds[i].startDate < monthAgo) {
-                return balances[account].sub(lockedAmount);
+                break;
             } else {
                 lockedAmount += rounds[i].balances[account];
             }
         }
         
-        return balances[msg.sender].sub(lockedAmount);
+        return balances[account].sub(lockedAmount);
     }
     
     /**
-     * @dev withdraw BIM previously deposited
+     * @dev withdraw BIM previously(1 month ago) deposited
      */
     function withdraw() external {
         beforeBalanceChange();
                 
         uint256 lockedAmount = checkUnlocked(msg.sender);
-        // unlocked = balance - locked
         uint256 unlockedAmount = balances[msg.sender].sub(lockedAmount);
+        
         // modify
         balances[msg.sender] -= unlockedAmount;
-        // sub total staked
+        // sub total locked up
         totalLockedUp -= unlockedAmount;
         
         // transfer unlocked amount
@@ -286,7 +286,7 @@ contract BIMLockup is Ownable, ReentrancyGuard {
             return;
         }
         
-        // has reached maximum mintable BIM 
+        // mint if BIMContract is mintable
         if (BIMContract.maxSupply() < BIMContract.totalSupply()) {
             // mint BIM for (_lastRewardBlock, block.number]
             uint blocksToReward = block.number.sub(_lastBIMRewardBlock);
@@ -296,14 +296,16 @@ contract BIMLockup is Ownable, ReentrancyGuard {
             if (remain < bimsToMint) {
                 bimsToMint = remain;
             }
+                    
+            // mint to this contract
+            BIMContract.mint(address(this), bimsToMint);
             
-            if (bimsToMint > 0) {
-                // BIM mint
-                BIMContract.mint(address(this), bimsToMint);
-            }
+            // mark block rewarded;
+            _lastBIMRewardBlock = block.number;
         }
-        
-        // compute BIM diff with _lastBIMBalance, this also distributes BIM-penalty received un-noticed.
+
+        // compute BIM diff with _lastBIMBalance, this also re-distributes BIM-penalty received from:
+        // BIMVesting Contract (early exit)
         uint bimDiff = BIMContract.balanceOf(address(this)).sub(_lastBIMBalance);
         if (bimDiff == 0) {
             return;
@@ -312,9 +314,6 @@ contract BIMLockup is Ownable, ReentrancyGuard {
         // BIM share
         uint roundBIMShare = bimDiff.mul(SHARE_MULTIPLIER)
                                     .div(totalLockedUp);
-                                
-        // mark block rewarded;
-        _lastBIMRewardBlock = block.number;
         
         // update BIM balance
         _lastBIMBalance = BIMContract.balanceOf(address(this));

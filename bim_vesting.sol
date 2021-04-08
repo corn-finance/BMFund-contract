@@ -152,11 +152,13 @@ contract BIMVesting is Ownable, IBIMVesting {
         uint256 lockedAmount;
         for (uint i= currentRound; i>0; i--) {
             if (rounds[i].startDate < monthAgo) {
-                return balances[account].sub(lockedAmount);
+                break;
             } else {
                 lockedAmount += rounds[i].balances[account];
             }
         }
+        
+        return balances[account].sub(lockedAmount);
     }
     
     /**
