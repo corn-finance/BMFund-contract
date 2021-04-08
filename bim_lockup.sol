@@ -237,21 +237,32 @@ contract BIMLockup is Ownable, ReentrancyGuard {
      * @notice sum unclaimed rewards;
      */
     function checkBIMReward(address account) external view returns(uint256 bim) {
-        // reward = settled + unsettled + newMined
+        // reward = settled + unsettled + newMined + balance diff
         uint lastSettledRound = _settledBIMRounds[account];
         uint unsettledShare = _accBIMShares[_currentBIMRound-1].sub(_accBIMShares[lastSettledRound]);
         
-        uint newBIMShare;
-        if (totalLockedUp > 0 && BIMContract.maxSupply() < BIMContract.totalSupply()) {
+        // block rewards
+        uint bimsToMint;
+        if (BIMContract.maxSupply() < BIMContract.totalSupply()) {
             uint blocksToReward = block.number.sub(_lastBIMRewardBlock);
-            uint bimsToMint = BIMBlockReward.mul(blocksToReward);
-    
-            // BIM share
-            newBIMShare = bimsToMint.mul(SHARE_MULTIPLIER)
-                                        .div(totalLockedUp);
+            bimsToMint = BIMBlockReward.mul(blocksToReward);
+            uint remain = BIMContract.maxSupply().sub(BIMContract.totalSupply());
+            if (remain < bimsToMint) {
+                bimsToMint = remain;
+            }
         }
         
-        return _bimBalance[account] + (unsettledShare + newBIMShare)
+        // penalty
+        uint bimDiff = BIMContract.balanceOf(address(this)).sub(_lastBIMBalance);
+
+        // new distributable share
+        uint newShare;
+        if (totalLockedUp > 0) {
+            newShare = bimDiff.add(bimsToMint).mul(SHARE_MULTIPLIER)
+                                                .div(totalLockedUp);
+        }
+        
+        return _bimBalance[account] + (unsettledShare + newShare)
                                             .mul(balances[account])
                                             .div(SHARE_MULTIPLIER);  // remember to div by SHARE_MULTIPLIER;
     }
