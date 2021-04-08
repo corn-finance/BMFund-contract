@@ -207,12 +207,10 @@ contract BIMLockup is Ownable, ReentrancyGuard {
      * @dev set BIM reward per height
      */
     function setBIMBlockReward(uint256 reward) external onlyOwner {
-        beforeBalanceChange();
+        updateBIMRound();
         
         // set new block reward
         BIMBlockReward = reward;
-        
-        afterBalanceChange();
     }
     
     /**
