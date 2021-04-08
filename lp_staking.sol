@@ -84,20 +84,8 @@ contract LPStaking is Ownable, ReentrancyGuard {
     IERC20 public LPToken;
     IBIMVesting public BIMVestingContract;
     
-    // @dev vesting assets are grouped by duration
-    struct Round {
-        mapping (address => uint256) balances;
-        uint startDate;
-    }
-    
-    /// @dev round index mapping week data
-    mapping (uint => Round) public rounds;
-    /// @dev a monotonic increasing index, starts from 1 to avoid underflow
-    uint256 public currentRound = 1;
-
-    /// @dev curent total locked BIMS, rewards will be distributed pro rata based on balances
-    mapping (address => uint256) public balances;
-    uint256 public totalLockedUp;
+    mapping (address => uint256) private _balances; // staker's balance
+    uint256 private _totalStaked; // sum of balance
     
 
     constructor(IBIMToken bimContract, IERC20 lpToken, IBIMVesting bimVesting) 
@@ -105,7 +93,6 @@ contract LPStaking is Ownable, ReentrancyGuard {
         BIMContract = bimContract;
         LPToken = lpToken;
         BIMVestingContract = bimVesting;
-        rounds[0].startDate = block.timestamp; // create an ended week
     }
 
     /**
@@ -116,49 +103,41 @@ contract LPStaking is Ownable, ReentrancyGuard {
                 
         // transfer LP token from msg.sender
         LPToken.safeTransferFrom(msg.sender, address(this), amount);
-        // group deposits in current week to avert gas consumption in withdraw
-        rounds[currentRound].balances[msg.sender] += amount;
         // modify sender's balance
-        balances[msg.sender] += amount;
-        // sum up total locked BIMs
-        totalLockedUp += amount;
+        _balances[msg.sender] += amount;
+        // sum up total staked LP tokens
+        _totalStaked += amount;
     }
         
     /**
-     * @dev get current unlocked deposits
+     * @dev withdraw LP token previously deposited
      */
-    function checkUnlocked(address account) public view returns(uint256) {
-        uint256 monthAgo = block.timestamp - MONTH;
-
-        // this loop is bounded to 30days/7days by checking startDate
-        uint256 lockedAmount;
-        for (uint i= currentRound; i>0; i--) {
-            if (rounds[i].startDate < monthAgo) {
-                return balances[account].sub(lockedAmount);
-            } else {
-                lockedAmount += rounds[i].balances[account];
-            }
-        }
+    function withdraw(uint256 amount) external {
+        require(amount <= _balances[msg.sender], "amount exceeded");
         
-        return balances[msg.sender].sub(lockedAmount);
+        settleStakerBIMReward(msg.sender);
+                
+        // modify account
+        _balances[msg.sender] -= amount;
+        // sub total staked
+        _totalStaked -= amount;
+        
+        // transfer LP token back to msg.sender
+        LPToken.safeTransfer(msg.sender, amount);
     }
     
     /**
-     * @dev withdraw BIM previously deposited
+     * @dev return value staked for an account
      */
-    function withdraw() external {
-        settleStakerBIMReward(msg.sender);
-                
-        uint256 lockedAmount = checkUnlocked(msg.sender);
-        // unlocked = balance - locked
-        uint256 unlockedAmount = balances[msg.sender].sub(lockedAmount);
-        // modify
-        balances[msg.sender] -= unlockedAmount;
-        // sub total staked
-        totalLockedUp -= unlockedAmount;
-        
-        // transfer unlocked amount
-        LPToken.safeTransfer(msg.sender, unlockedAmount);
+    function numStaked(address account) external view returns (uint256) {
+        return _balances[account];
+    }
+
+    /**
+     * @dev return total staked value
+     */
+    function totalStaked() external view returns (uint256) {
+        return _totalStaked;
     }
 
     /**
@@ -216,17 +195,17 @@ contract LPStaking is Ownable, ReentrancyGuard {
         uint unsettledShare = _accBIMShares[_currentBIMRound-1].sub(_accBIMShares[lastSettledRound]);
         
         uint newBIMShare;
-        if (totalLockedUp > 0 && BIMContract.maxSupply() < BIMContract.totalSupply()) {
+        if (_totalStaked > 0 && BIMContract.maxSupply() < BIMContract.totalSupply()) {
             uint blocksToReward = block.number.sub(_lastBIMRewardBlock);
-            uint mintedBIM = BIMBlockReward.mul(blocksToReward);
+            uint bimsToMint = BIMBlockReward.mul(blocksToReward);
     
             // BIM share
-            newBIMShare = mintedBIM.mul(SHARE_MULTIPLIER)
-                                        .div(totalLockedUp);
+            newBIMShare = bimsToMint.mul(SHARE_MULTIPLIER)
+                                        .div(_totalStaked);
         }
         
         return _bimBalance[account] + (unsettledShare + newBIMShare)
-                                            .mul(balances[account])
+                                            .mul(_balances[account])
                                             .div(SHARE_MULTIPLIER);  // remember to div by SHARE_MULTIPLIER;
     }
     
@@ -242,7 +221,7 @@ contract LPStaking is Ownable, ReentrancyGuard {
         
         // round BIM
         uint roundBIM = _accBIMShares[newSettledRound].sub(_accBIMShares[lastSettledRound])
-                                .mul(balances[account])
+                                .mul(_balances[account])
                                 .div(SHARE_MULTIPLIER);  // remember to div by SHARE_MULTIPLIER    
         
         // update BIM balance
@@ -262,7 +241,7 @@ contract LPStaking is Ownable, ReentrancyGuard {
         }
     
         // postpone BIM rewarding if there is none staker
-        if (totalLockedUp == 0) {
+        if (_totalStaked == 0) {
             return;
         }
         
@@ -285,7 +264,7 @@ contract LPStaking is Ownable, ReentrancyGuard {
 
         // BIM share
         uint roundBIMShare = bimsToMint.mul(SHARE_MULTIPLIER)
-                                    .div(totalLockedUp);
+                                    .div(_totalStaked);
                                 
         // mark block rewarded;
         _lastBIMRewardBlock = block.number;
