@@ -84,7 +84,7 @@ contract BIMLockup is Ownable, ReentrancyGuard {
     // @dev vesting assets are grouped by duration
     struct Round {
         mapping (address => uint256) balances;
-        uint startDate;
+        uint vestFrom;
     }
     
     /// @dev round index mapping week data
@@ -100,7 +100,7 @@ contract BIMLockup is Ownable, ReentrancyGuard {
     constructor(IBIMToken bimContract) 
         public {
         BIMContract = bimContract;
-        rounds[0].startDate = block.timestamp; // create an ended week
+        rounds[0].vestFrom = block.timestamp; // create an week already in vesting
     }
 
     /**
@@ -108,10 +108,10 @@ contract BIMLockup is Ownable, ReentrancyGuard {
      */
     function beforeBalanceChange() internal nonReentrant {
         // create a new weekly round for deposit if recent week ends.
-        if (block.timestamp.sub(rounds[currentRound].startDate) >= 0) {
+        if (block.timestamp.sub(rounds[currentRound].vestFrom) >= 0) {
             currentRound++;
             // new week starts
-            rounds[currentRound].startDate = rounds[currentRound-1].startDate + WEEK;
+            rounds[currentRound].vestFrom = rounds[currentRound-1].vestFrom + WEEK;
         }
         
         // settle the caller before any lockup balance changes
@@ -153,7 +153,7 @@ contract BIMLockup is Ownable, ReentrancyGuard {
         // this loop is bounded to 30days/7days by checking startDate
         uint256 lockedAmount;
         for (uint i= currentRound; i>0; i--) {
-            if (rounds[i].startDate < monthAgo) {
+            if (rounds[i].vestFrom < monthAgo) {
                 break;
             } else {
                 lockedAmount += rounds[i].balances[account];
