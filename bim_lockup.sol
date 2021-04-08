@@ -134,7 +134,7 @@ contract BIMLockup is Ownable, ReentrancyGuard {
                 
         // transfer BIM from msg.sender
         BIMContract.safeTransferFrom(msg.sender, address(this), amount);
-        // group deposits in current week to avert gas consumption in withdraw
+        // group deposits in current week to avert unbounded gas consumption in withdraw
         rounds[currentRound].balances[msg.sender] += amount;
         // modify sender's balance
         balances[msg.sender] += amount;
@@ -150,7 +150,7 @@ contract BIMLockup is Ownable, ReentrancyGuard {
     function checkUnlocked(address account) public view returns(uint256) {
         uint256 monthAgo = block.timestamp - MONTH;
 
-        // this loop is bounded to 30days/7days by checking startDate
+        // this loop is bounded to 30days/7days by checking vestFrom
         uint256 lockedAmount;
         for (uint i= currentRound; i>0; i--) {
             if (rounds[i].vestFrom < monthAgo) {
@@ -169,9 +169,8 @@ contract BIMLockup is Ownable, ReentrancyGuard {
     function withdraw() external {
         beforeBalanceChange();
                 
-        uint256 lockedAmount = checkUnlocked(msg.sender);
-        uint256 unlockedAmount = balances[msg.sender].sub(lockedAmount);
-        
+        uint256 unlockedAmount = checkUnlocked(msg.sender);
+
         // modify
         balances[msg.sender] -= unlockedAmount;
         // sub total locked up
