@@ -227,10 +227,10 @@ contract BIMVesting is Ownable, IBIMVesting {
      */
     function update() internal {
         if (block.timestamp.sub(rounds[currentRound].startDate) > DAY) {
-            // compute numDays in order to avoid "NO USER'S INTERACTION AT ALL" in a day.
-            uint numDays = block.timestamp.sub(rounds[currentRound].startDate).div(DAY);
+            currentRound++;
             
-            currentRound += numDays;
+            // compute num days passed, and align to 24 hours
+            uint numDays = block.timestamp.sub(rounds[currentRound].startDate).div(DAY);
             rounds[currentRound].startDate = rounds[currentRound-1].startDate + numDays * DAY;
         }
     }
