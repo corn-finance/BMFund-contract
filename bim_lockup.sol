@@ -298,7 +298,7 @@ contract BIMLockup is Ownable, ReentrancyGuard {
         }
         
         // mint if BIMContract is mintable
-        if (BIMContract.maxSupply() < BIMContract.totalSupply()) {
+        if (BIMContract.maxSupply() > BIMContract.totalSupply()) {
             // mint BIM for (_lastRewardBlock, block.number]
             uint blocksToReward = block.number.sub(_lastBIMRewardBlock);
             uint bimsToMint = BIMBlockReward.mul(blocksToReward);
