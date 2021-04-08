@@ -259,8 +259,10 @@ contract LPStaking is Ownable, ReentrancyGuard {
             bimsToMint = remain;
         }
         
-        // BIM mint to BIMVestingContract
-        BIMContract.mint(address(BIMVestingContract), bimsToMint);
+        if (bimsToMint > 0) {
+            // BIM mint to BIMVestingContract
+            BIMContract.mint(address(BIMVestingContract), bimsToMint); 
+        }
 
         // BIM share
         uint roundBIMShare = bimsToMint.mul(SHARE_MULTIPLIER)

@@ -307,9 +307,11 @@ contract BIMLockup is Ownable, ReentrancyGuard {
             if (remain < bimsToMint) {
                 bimsToMint = remain;
             }
-                    
-            // mint to this contract
-            BIMContract.mint(address(this), bimsToMint);
+            
+            if (bimsToMint > 0) {
+                // mint to this contract
+                BIMContract.mint(address(this), bimsToMint);
+            }
             
             // mark block rewarded;
             _lastBIMRewardBlock = block.number;
