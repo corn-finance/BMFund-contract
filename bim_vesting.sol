@@ -75,7 +75,7 @@ contract BIMVesting is Ownable, IBIMVesting {
     using SafeMath for uint;
     using SafeERC20 for IBIMToken;
 
-    uint256 constant DAY = 86400;
+    uint256 constant DAY = 5;
     uint256 constant MONTH = DAY * 30;
     
     IBIMToken public BIMContract;
@@ -105,11 +105,11 @@ contract BIMVesting is Ownable, IBIMVesting {
     }
     
     /// @dev round index mapping
-    mapping (uint => Round) public rounds;
-    /// @dev a monotonic increasing index, starts from 1 to avoid underflow
-    uint256 public currentRound = 1;
+    mapping (int256 => Round) public rounds;
+    /// @dev a monotonic increasing index
+    int256 public currentRound;
 
-    /// @dev curent locked BIMS    
+    /// @dev current vested BIMS    
     mapping (address => uint256) private balances;
 
     constructor(IBIMToken bimContract, IERC20 bimLockupContract) 
@@ -158,7 +158,7 @@ contract BIMVesting is Ownable, IBIMVesting {
     function checkLockedBims(address account) public view returns(uint256) {
         uint256 monthAgo = block.timestamp - MONTH;
         uint256 lockedAmount;
-        for (uint i= currentRound; i>0; i--) {
+        for (int256 i= currentRound; i>=0; i--) {
             if (rounds[i].startDate < monthAgo) {
                 break;
             } else {
@@ -200,7 +200,7 @@ contract BIMVesting is Ownable, IBIMVesting {
 
         // reset balances in this month(still locked) to 0
         uint256 monthAgo = block.timestamp - MONTH;
-        for (uint i= currentRound; i>0; i--) {
+        for (int256 i= currentRound; i>=0; i--) {
             if (rounds[i].startDate < monthAgo) {
                 break;
             } else {
@@ -225,12 +225,11 @@ contract BIMVesting is Ownable, IBIMVesting {
     /**
      * @dev round update operation
      */
-    function update() internal {
+    function update() public {
         if (block.timestamp.sub(rounds[currentRound].startDate) > DAY) {
-            currentRound++;
-            
             // compute num days passed, and align to 24 hours
             uint numDays = block.timestamp.sub(rounds[currentRound].startDate).div(DAY);
+            currentRound++;
             rounds[currentRound].startDate = rounds[currentRound-1].startDate + numDays * DAY;
         }
     }
