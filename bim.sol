@@ -430,7 +430,7 @@ contract BIMToken is ERC20, Pausable, Ownable, IBIMToken {
         symbol = _symbol;
         decimals = _decimals;
         MAX_SUPPLY = _maxSupply * (10 ** uint256(_decimals));
-        setMintable(msg.sender, true);
+        setMintable(owner(), true);
     }
     
     /**

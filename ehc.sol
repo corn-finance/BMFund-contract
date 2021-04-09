@@ -398,7 +398,7 @@ contract EHCToken is ERC20, Pausable, Ownable, IEHCToken {
     using SafeMath for uint;
     
     // @dev The Asset contract as mining reward(eg: WETH)
-    IERC20 public MiningAssetContract; 
+    IERC20 public immutable MiningAssetContract; 
     
     // @dev manager's address
     address public managerAddress;
@@ -406,6 +406,24 @@ contract EHCToken is ERC20, Pausable, Ownable, IEHCToken {
     address public buybackAddress;
     // @dev staking address
     address public stakingAddress;
+    
+    
+   /**
+     * @dev Emitted when an account is set mintable
+     */
+    event Mintable(address account);
+    /**
+     * @dev Emitted when an account is set unmintable
+     */
+    event Unmintable(address account);
+
+    // @dev mintable group
+    mapping(address => bool) public mintableGroup;
+    
+    modifier onlyMintableGroup() {
+        require(mintableGroup[msg.sender], "not in mintable group");
+        _;
+    }
 
     mapping(address => TimeLock) private _timelock;
 
@@ -420,21 +438,27 @@ contract EHCToken is ERC20, Pausable, Ownable, IEHCToken {
     /**
      * @dev Initialize the contract give all tokens to the deployer
      */
-    constructor(string memory _name, string memory _symbol, uint8 _decimals, uint256 _initialSupply) public {
+    constructor(string memory _name, string memory _symbol, uint8 _decimals, uint256 _initialSupply, IERC20 miningAsset) public {
         name = _name;
         symbol = _symbol;
         decimals = _decimals;
+        MiningAssetContract = miningAsset;
+        setMintable(owner(), true);
         _mint(_msgSender(), _initialSupply * (10 ** uint256(_decimals)));
     }
     
     /**
-     *@notice set mining asset to distribute
+     * @dev set or remove address to mintable group
      */
-    function setMiningAsset(IERC20 assetContract)  external onlyOwner {
-        require (assetContract != IERC20(0), "0 address");
-        MiningAssetContract = assetContract;
+    function setMintable(address account, bool allow) public onlyOwner {
+        mintableGroup[account] = allow;
+        if (allow) {
+            emit Mintable(account);
+        }  else {
+            emit Unmintable(account);
+        }
     }
-    
+
     /**
      * @notice set manager's address
      */
@@ -483,7 +507,7 @@ contract EHCToken is ERC20, Pausable, Ownable, IEHCToken {
      *
      * - `to` cannot be the zero address.
      */
-    function mint(address account, uint256 amount) public onlyOwner {
+    function mint(address account, uint256 amount) public override onlyMintableGroup {
         _mint(account, amount);
         
     }
