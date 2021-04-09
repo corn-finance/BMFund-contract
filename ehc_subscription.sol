@@ -344,9 +344,9 @@ contract EHCSubscription is Ownable {
             currentRound++;
             
             // set new round parameters
-            round.startTime = rounds[currentRound-1].startTime + MONTH;
-            round.price = EHCOracle.getPrice();
-            round.mintCap = EHCToken.totalSupply().mul(25).div(100);
+            rounds[currentRound].startTime = rounds[currentRound-1].startTime + MONTH;
+            rounds[currentRound].price = EHCOracle.getPrice();
+            rounds[currentRound].mintCap = EHCToken.totalSupply().mul(25).div(100);
         }
     }
 }
