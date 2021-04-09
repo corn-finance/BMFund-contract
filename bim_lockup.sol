@@ -93,10 +93,10 @@ contract BIMLockup is Ownable {
     int256 public currentRound = 0;
 
     /// @dev lockup balance
-    mapping (address => uint256) public balances;
+    mapping (address => uint256) public _balances;
     
     /// @dev total locked-up
-    uint256 public totalLockedUp;
+    uint256 private _totalLockedUp;
     
     constructor(IBIMToken bimContract) 
         public {
@@ -127,6 +127,14 @@ contract BIMLockup is Ownable {
         _lastBIMBalance = BIMContract.balanceOf(address(this));
     }
     
+    
+    /**
+     * @dev return total value locked
+     */
+    function tvl() external view returns (uint256) {
+        return _totalLockedUp;
+    }
+    
     /**
      * @dev deposit BIM
      */
@@ -138,11 +146,18 @@ contract BIMLockup is Ownable {
         // group deposits in current week to avert unbounded gas consumption in withdraw
         rounds[currentRound].balances[msg.sender] += amount;
         // modify sender's balance
-        balances[msg.sender] += amount;
+        _balances[msg.sender] += amount;
         // sum up total locked BIMs
-        totalLockedUp += amount;
+        _totalLockedUp += amount;
 
         afterBalanceChange();
+    }
+    
+    /**
+     * @dev check bims
+     */
+    function checkBims(address account) public view returns(uint256) {
+        return _balances[account];
     }
         
     /**
@@ -161,7 +176,7 @@ contract BIMLockup is Ownable {
             }
         }
         
-        return balances[account].sub(lockedAmount);
+        return _balances[account].sub(lockedAmount);
     }
     
     /**
@@ -173,9 +188,9 @@ contract BIMLockup is Ownable {
         uint256 unlockedAmount = checkUnlocked(msg.sender);
 
         // modify
-        balances[msg.sender] -= unlockedAmount;
+        _balances[msg.sender] -= unlockedAmount;
         // sub total locked up
-        totalLockedUp -= unlockedAmount;
+        _totalLockedUp -= unlockedAmount;
         
         // transfer unlocked amount
         BIMContract.safeTransfer(msg.sender, unlockedAmount);
@@ -256,13 +271,13 @@ contract BIMLockup is Ownable {
 
         // new distributable share
         uint newShare;
-        if (totalLockedUp > 0) {
+        if (_totalLockedUp > 0) {
             newShare = bimDiff.add(bimsToMint).mul(SHARE_MULTIPLIER)
-                                                .div(totalLockedUp);
+                                                .div(_totalLockedUp);
         }
         
         return _bimBalance[account] + (unsettledShare + newShare)
-                                            .mul(balances[account])
+                                            .mul(_balances[account])
                                             .div(SHARE_MULTIPLIER);  // remember to div by SHARE_MULTIPLIER;
     }
     
@@ -278,7 +293,7 @@ contract BIMLockup is Ownable {
         
         // round BIM
         uint roundBIM = _accBIMShares[newSettledRound].sub(_accBIMShares[lastSettledRound])
-                                .mul(balances[account])
+                                .mul(_balances[account])
                                 .div(SHARE_MULTIPLIER);  // remember to div by SHARE_MULTIPLIER    
         
         // update BIM balance
@@ -293,7 +308,7 @@ contract BIMLockup is Ownable {
      */
     function updateBIMRound() internal {
         // postpone BIM rewarding if there is none locked-up
-        if (totalLockedUp == 0) {
+        if (_totalLockedUp == 0) {
             return;
         }
         
@@ -326,7 +341,7 @@ contract BIMLockup is Ownable {
 
         // BIM share
         uint roundBIMShare = bimDiff.mul(SHARE_MULTIPLIER)
-                                    .div(totalLockedUp);
+                                    .div(_totalLockedUp);
         
         // update contract's BIM balance
         _lastBIMBalance = BIMContract.balanceOf(address(this));
