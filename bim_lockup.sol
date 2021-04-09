@@ -159,11 +159,11 @@ contract BIMLockup is Ownable {
     function checkBims(address account) public view returns(uint256) {
         return _balances[account];
     }
-        
+    
     /**
-     * @dev get current unlocked deposits
+     * @dev get locked value
      */
-    function checkUnlocked(address account) public view returns(uint256) {
+    function checkLocked(address account) public view returns(uint256) {
         uint256 monthAgo = block.timestamp - MONTH;
 
         // this loop is bounded to 30days/7days by checking vestFrom
@@ -176,6 +176,14 @@ contract BIMLockup is Ownable {
             }
         }
         
+        return lockedAmount;
+    }
+        
+    /**
+     * @dev get current unlocked deposits
+     */
+    function checkUnlocked(address account) public view returns(uint256) {
+        uint256 lockedAmount = checkLocked(account);
         return _balances[account].sub(lockedAmount);
     }
     
