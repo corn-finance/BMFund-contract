@@ -595,5 +595,6 @@ interface IBIMVesting {
     function vest(address account, uint256 amount) external;
 }
 
-interface IMonthlyBIMVesting {
+interface IEHCOralce {
+   function getPrice() external view returns(uint256);
 }
