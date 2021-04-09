@@ -195,9 +195,14 @@ contract LPStaking is Ownable, ReentrancyGuard {
         uint unsettledShare = _accBIMShares[_currentBIMRound-1].sub(_accBIMShares[lastSettledRound]);
         
         uint newBIMShare;
-        if (_totalStaked > 0 && BIMContract.maxSupply() < BIMContract.totalSupply()) {
+        if (_totalStaked > 0 && BIMContract.maxSupply() > BIMContract.totalSupply()) {
             uint blocksToReward = block.number.sub(_lastBIMRewardBlock);
             uint bimsToMint = BIMBlockReward.mul(blocksToReward);
+            uint remain = BIMContract.maxSupply().sub(BIMContract.totalSupply());
+            // cap to BIM max supply
+            if (remain < bimsToMint) {
+                bimsToMint = remain;
+            }
     
             // BIM share
             newBIMShare = bimsToMint.mul(SHARE_MULTIPLIER)
