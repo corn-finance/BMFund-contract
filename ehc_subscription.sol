@@ -94,13 +94,13 @@ contract EHCSubscription is Ownable {
         uint256 totalUSDTS; // sum of balances
 
         // fields set after subscription settlement
-        bool hasSettled;
+        bool hasSettled; // mark if subscription ends
         uint256 refundPerUSDT; // USDTS to refund for over subscription
         uint256 ehcPerUSDTSecs; // EHC per USDTS per seconds
         uint256 mintedEHC; // actually total EHC minted
         
-        // EHC last claimed date
-        mapping (address => uint256) lastClaim; // USDTS
+        mapping (address => uint256) lastClaim;  // EHC last claim() date
+        mapping (address => bool) refundClaimed; // USDT refunded mark
     }
     
     /// @dev rounds indexing
@@ -108,10 +108,10 @@ contract EHCSubscription is Ownable {
     /// @dev a monotonic increasing index
     int256 public currentRound = 0;
 
-    /// @dev USDT refund balance
-    mapping (address => uint256) internal _usdtRefundBalance; 
+    /// @dev settled USDT refund balance
+    mapping (address => uint256) internal _refundBalance; 
     
-    /// @dev EHC claimable balance
+    /// @dev settled EHC balance
     mapping (address => uint256) internal _ehcBalance; 
     
     /// @dev a struct to keep at most 2 round index for a user
@@ -120,6 +120,7 @@ contract EHCSubscription is Ownable {
         int256 lastest;
     }
     
+    /// @dev user's recent subscribed 2 rounds
     mapping (address => RoundIndex) internal _roundIndices;  
 
     /// @dev contract confirmed USDTS
@@ -161,7 +162,7 @@ contract EHCSubscription is Ownable {
         RoundIndex storage idx = _roundIndices[msg.sender];
         if (idx.lastest != currentRound) {
             // release previous EHC to balance
-            releaseEHC(msg.sender, idx.prev);
+            settleRound(msg.sender, idx.prev);
             
             // make a shifting, by always keep idx.lastest to current round
             //
@@ -184,10 +185,9 @@ contract EHCSubscription is Ownable {
         
         RoundIndex storage idx = _roundIndices[msg.sender];
         
-        // total claimable:
-        // ehcBalance + idx.prevRound + idx.lastest
-        releaseEHC(msg.sender, idx.lastest);
-        releaseEHC(msg.sender, idx.prev);
+        // settle possible previous subscribed EHC
+        settleRound(msg.sender, idx.lastest);
+        settleRound(msg.sender, idx.prev);
         
         // clear balance
         uint256 amount = _ehcBalance[msg.sender];
@@ -195,6 +195,26 @@ contract EHCSubscription is Ownable {
         
         // send back
         EHCToken.safeTransfer(msg.sender, amount);
+    }
+    
+    /**
+     * @dev claim refund
+     */
+    function claimRefund() external {
+        update();
+        
+        RoundIndex storage idx = _roundIndices[msg.sender];
+            
+        // settle possible previous refundable rounds
+        settleRound(msg.sender, idx.lastest);
+        settleRound(msg.sender, idx.prev);
+        
+        // clear balance
+        uint256 amount = _refundBalance[msg.sender];
+        delete _refundBalance[msg.sender];
+        
+        // send back
+        USDTContract.safeTransfer(msg.sender, amount);
     }
         
     /**
@@ -207,28 +227,51 @@ contract EHCSubscription is Ownable {
     }
     
     /**
-     * @dev try release any EHC on round r based on timestamp
+     * @dev check refund
      */
-    function releaseEHC(address account, int256 r) internal {
+    function checkRefund(address account) external view returns (uint256 amount) {
+        RoundIndex storage idx = _roundIndices[msg.sender];
+        amount += checkRoundRefund(account, idx.prev);
+        amount += checkRoundRefund(account, idx.lastest);
+    }
+    
+    /**
+     * @dev 
+     * 1. try release any EHC on round r based on timestamp
+     * 2. settle refund USDTS
+     */
+    function settleRound(address account, int256 r) internal {
         Round storage round = rounds[r];
         if (round.hasSettled) {
-            uint256 release = checkRoundEHC(account, r);
-                        
-            // add to balance
-            _ehcBalance[msg.sender] += release;
-            
-            // set claim timestamp
+            // EHC settlement
+            uint256 ehc = checkRoundEHC(account, r);
+            _ehcBalance[account] += ehc;
             round.lastClaim[account] = block.timestamp;
+            
+            // refund settlement
+            uint256 refund = checkRoundRefund(account,r);
+            _refundBalance[account] += refund;
+            round.refundClaimed[account] = true;
         }
     }
-
+    
+    /**
+     * @dev check existing refund on round r 
+     */
+    function checkRoundRefund(address account, int256 r) internal view returns(uint256 release) {
+        Round storage round = rounds[r];
+        // refund USDT
+        if (!round.refundClaimed[account] && round.refundPerUSDT > 0) {
+            return round.refundPerUSDT.mul(round.balances[account]);
+        }
+    }
     
     /**
      * @dev check unlocked EHC on round r bsed on timestamp
      */
     function checkRoundEHC(address account, int256 r) internal view returns(uint256 release) {
         Round storage round = rounds[r];
-        if (round.hasSettled) {
+        if (block.timestamp > round.startTime + WEEK) {
             // if block.timestamp has passed one WEEK+MONTH since round.startTime
             // we cap it to the last second
             uint timestamp = block.timestamp;
