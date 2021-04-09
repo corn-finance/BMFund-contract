@@ -85,7 +85,7 @@ contract EHCSubscription is Ownable {
     // @dev subscription are grouped by week
     struct Round {
         // fields set at new round
-        uint256 cap; // maximum supply of EHC in this round
+        uint256 mintCap; // maximum supply of EHC in this round
         uint256 price; // price for subscription.
         uint startTime; // startTime for this round
 
@@ -97,8 +97,7 @@ contract EHCSubscription is Ownable {
         bool hasSettled; // mark if subscription ends
         uint256 refundPerUSDT; // USDTS to refund for over subscription
         uint256 ehcPerUSDTSecs; // EHC per USDTS per seconds
-        uint256 mintedEHC; // actually total EHC minted
-        
+
         mapping (address => uint256) lastClaim;  // EHC last claim() date
         mapping (address => bool) refundClaimed; // USDT refunded mark
     }
@@ -124,7 +123,7 @@ contract EHCSubscription is Ownable {
     mapping (address => RoundIndex) internal _roundIndices;  
 
     /// @dev contract confirmed USDTS
-    uint256 public contractUSDTs;
+    uint256 public confirmedUSDTs;
     
     constructor(IEHCToken ehcToken, IERC20 usdtContract, IEHCOralce oracle) public {
         EHCToken = ehcToken;
@@ -134,7 +133,7 @@ contract EHCSubscription is Ownable {
         // setting round 0 
         rounds[currentRound].startTime = block.timestamp;
         rounds[currentRound].price = EHCOracle.getPrice();
-        rounds[currentRound].cap = EHCToken.totalSupply().mul(25).div(100);
+        rounds[currentRound].mintCap = EHCToken.totalSupply().mul(25).div(100);
     }
     
     /**
@@ -262,7 +261,8 @@ contract EHCSubscription is Ownable {
         Round storage round = rounds[r];
         // refund USDT
         if (!round.refundClaimed[account] && round.refundPerUSDT > 0) {
-            return round.refundPerUSDT.mul(round.balances[account]);
+            return round.refundPerUSDT.mul(round.balances[account])
+                                        .div(SHARE_MULTIPLIER);
         }
     }
     
@@ -292,7 +292,9 @@ contract EHCSubscription is Ownable {
                 }
             }
             
-            return duration.mul(round.ehcPerUSDTSecs).mul(round.balances[account]);
+            return duration.mul(round.ehcPerUSDTSecs)
+                            .mul(round.balances[account])
+                            .div(SHARE_MULTIPLIER);
         }
     }
     
@@ -301,46 +303,50 @@ contract EHCSubscription is Ownable {
      */
     function update() public {
         // check subscription ends and need settlement
-        if (block.timestamp > rounds[currentRound].startTime + WEEK && !rounds[currentRound].hasSettled) {
-             // settle current round;
-            uint256 capUSDTS = rounds[currentRound].cap.mul(rounds[currentRound].price);
+        Round storage round = rounds[currentRound];
+        if (block.timestamp > round.startTime + WEEK && !round.hasSettled) {
+            // maximum USDTs
+            uint256 capUSDTS = round.mintCap.mul(round.price);
+            uint256 ehcToMint;
             
             // over subscribed, set refundPerUSDT
-            if (rounds[currentRound].totalUSDTS > capUSDTS) {
-                // set USDTS refund ratio
-                rounds[currentRound].refundPerUSDT = rounds[currentRound].totalUSDTS.sub(capUSDTS)
-                                                                .mul(SHARE_MULTIPLIER)
-                                                                .div(rounds[currentRound].totalUSDTS);
-                                                                
-                rounds[currentRound].mintedEHC = rounds[currentRound].cap;
-
-                contractUSDTs += capUSDTS;
-            } else {
-                rounds[currentRound].mintedEHC = rounds[currentRound].totalUSDTS.div(rounds[currentRound].price);
+            if (round.totalUSDTS > capUSDTS) {
+                // set to: (totalUSDT - capUSDT) / totalUSDT
+                round.refundPerUSDT = round.totalUSDTS.sub(capUSDTS)
+                                                        .mul(SHARE_MULTIPLIER)
+                                                        .div(round.totalUSDTS);
                 
-                contractUSDTs += rounds[currentRound].totalUSDTS;
+                // set ehc to mint to maximum                                             
+                ehcToMint = round.mintCap;
+
+                // record USDT earned to capUSDTS;
+                confirmedUSDTs += capUSDTS;
+            } else {
+                // set ehc to mint by total USDT
+                ehcToMint = round.totalUSDTS.div(round.price);
+                
+                // record USDT earned to total received
+                confirmedUSDTs += round.totalUSDTS;
             }
             
             // set EHC share per totalUSDTS per seconds
-            rounds[currentRound].ehcPerUSDTSecs = rounds[currentRound].mintedEHC
-                                                .mul(SHARE_MULTIPLIER)
-                                                .div(rounds[currentRound].totalUSDTS)
-                                                .div(MONTH);
+            round.ehcPerUSDTSecs = ehcToMint.mul(SHARE_MULTIPLIER)
+                                            .div(round.totalUSDTS)
+                                            .div(MONTH);
             
             // mint EHC to this contract
-            EHCToken.mint(address(this), rounds[currentRound].mintedEHC);
+            EHCToken.mint(address(this), ehcToMint);
             
             // mark settled
             rounds[currentRound].hasSettled = true;
             
-        } else if (block.timestamp > rounds[currentRound].startTime + MONTH) { 
-            // releasing period ends, start an new round
+        } else if (block.timestamp > round.startTime + MONTH) { // new round initiate
             currentRound++;
             
             // set new round parameters
-            rounds[currentRound].startTime = rounds[currentRound-1].startTime + MONTH;
-            rounds[currentRound].price = EHCOracle.getPrice();
-            rounds[currentRound].cap = EHCToken.totalSupply().mul(25).div(100);
+            round.startTime = rounds[currentRound-1].startTime + MONTH;
+            round.price = EHCOracle.getPrice();
+            round.mintCap = EHCToken.totalSupply().mul(25).div(100);
         }
     }
 }
