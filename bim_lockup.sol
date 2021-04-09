@@ -93,7 +93,7 @@ contract BIMLockup is Ownable {
     int256 public currentRound = 0;
 
     /// @dev lockup balance
-    mapping (address => uint256) public _balances;
+    mapping (address => uint256) private _balances;
     
     /// @dev total locked-up
     uint256 private _totalLockedUp;
