@@ -75,7 +75,7 @@ contract BIMVesting is Ownable, IBIMVesting {
     using SafeMath for uint;
     using SafeERC20 for IBIMToken;
 
-    uint256 constant DAY = 5;
+    uint256 constant DAY = 86400;
     uint256 constant MONTH = DAY * 30;
     
     IBIMToken public BIMContract;
@@ -226,9 +226,8 @@ contract BIMVesting is Ownable, IBIMVesting {
      * @dev round update operation
      */
     function update() public {
-        if (block.timestamp.sub(rounds[currentRound].startDate) > DAY) {
-            // compute num days passed, and align to 24 hours
-            uint numDays = block.timestamp.sub(rounds[currentRound].startDate).div(DAY);
+        uint numDays = block.timestamp.sub(rounds[currentRound].startDate).div(DAY);
+        if (numDays > 0) {
             currentRound++;
             rounds[currentRound].startDate = rounds[currentRound-1].startDate + numDays * DAY;
         }
