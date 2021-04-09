@@ -88,9 +88,9 @@ contract BIMLockup is Ownable, ReentrancyGuard {
     }
     
     /// @dev round index mapping week data
-    mapping (uint => Round) public rounds;
-    /// @dev a monotonic increasing index, starts from 1 to avoid underflow
-    uint256 public currentRound = 1;
+    mapping (int256 => Round) public rounds;
+    /// @dev a monotonic increasing index
+    int256 public currentRound = 0;
 
     /// @dev lockup balance
     mapping (address => uint256) public balances;
@@ -109,7 +109,7 @@ contract BIMLockup is Ownable, ReentrancyGuard {
      */
     function beforeBalanceChange() internal nonReentrant {
         // create a new weekly round for deposit if recent week ends.
-        if (block.timestamp.sub(rounds[currentRound].vestFrom) >= 0) {
+        if (block.timestamp > rounds[currentRound].vestFrom) {
             currentRound++;
             // new week starts
             rounds[currentRound].vestFrom = rounds[currentRound-1].vestFrom + WEEK;
@@ -153,7 +153,7 @@ contract BIMLockup is Ownable, ReentrancyGuard {
 
         // this loop is bounded to 30days/7days by checking vestFrom
         uint256 lockedAmount;
-        for (uint i= currentRound; i>0; i--) {
+        for (int256 i= currentRound; i>=0; i--) {
             if (rounds[i].vestFrom < monthAgo) {
                 break;
             } else {
