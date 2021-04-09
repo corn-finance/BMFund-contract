@@ -177,6 +177,14 @@ contract EHCSubscription is Ownable {
     }
     
     /**
+     * @dev owner claim confirmed USDTs
+     */
+    function claimConfirmedUSDT() external onlyOwner {
+        USDTContract.safeTransfer(owner(), confirmedUSDTs);
+        confirmedUSDTs = 0;
+    }
+    
+    /**
      * @dev claim EHC
      */
     function claimEHC() external {
