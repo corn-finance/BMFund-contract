@@ -71,7 +71,7 @@ contract Ownable is Context {
 /**
  * @dev BIM Lockup contract
  */
-contract BIMLockup is Ownable, ReentrancyGuard {
+contract BIMLockup is Ownable {
     using SafeMath for uint;
     using SafeERC20 for IBIMToken;
 
@@ -81,13 +81,13 @@ contract BIMLockup is Ownable, ReentrancyGuard {
     
     IBIMToken public BIMContract;
     
-    // @dev vesting assets are grouped by duration
+    // @dev lockup assets deposits are grouped by week
     struct Round {
         mapping (address => uint256) balances;
         uint vestFrom;
     }
     
-    /// @dev round index mapping week data
+    /// @dev rounds indexing
     mapping (int256 => Round) public rounds;
     /// @dev a monotonic increasing index
     int256 public currentRound = 0;
@@ -107,7 +107,7 @@ contract BIMLockup is Ownable, ReentrancyGuard {
     /**
      * @dev function called before every user's interaction
      */
-    function beforeBalanceChange() internal nonReentrant {
+    function beforeBalanceChange() internal {
         // create a new weekly round for deposit if recent week ends.
         if (block.timestamp > rounds[currentRound].vestFrom) {
             currentRound++;
