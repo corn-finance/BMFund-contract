@@ -178,9 +178,9 @@ contract EHCSubscription is Ownable {
     }
     
     /**
-     * @dev claim EHC and possible refunded-USDT
+     * @dev claim EHC
      */
-    function claim() external {
+    function claimEHC() external {
         update();
         
         RoundIndex storage idx = _roundIndices[msg.sender];
