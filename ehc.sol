@@ -393,6 +393,9 @@ contract Pausable is Context {
     }
 }
 
+/**
+ * @notice EHC token contract (ERC20)
+ */
 contract EHCToken is ERC20, Pausable, Ownable, IEHCToken {
     using SafeERC20 for IERC20;
     using SafeMath for uint;
