@@ -472,7 +472,7 @@ contract BIMToken is ERC20, Pausable, Ownable, IBIMToken {
      *
      * See {ERC20-_burn}.
      */
-    function burn(uint256 amount) public {
+    function burn(uint256 amount) public override {
         _burn(_msgSender(), amount);
     }
 
