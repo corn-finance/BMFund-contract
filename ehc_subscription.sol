@@ -355,12 +355,12 @@ contract EHCSubscription is Ownable {
 
             // compute time passed since last claim
             // [startTime -- WEEK -- release start(settled) -- 30 days --- release end]
-            uint startTime = round.lastClaim[account] == 0? // never claimed
+            uint lastClaim = round.lastClaim[account] == 0? // never claimed
                                     round.startTime.add(WEEK):round.lastClaim[account];
 
             // convert time elapsed -> EHC token
-            if (timestamp > startTime) {
-                uint duration = timestamp.sub(round.lastClaim[account]);
+            if (timestamp > lastClaim) {
+                uint duration = timestamp.sub(lastClaim);
                 
                 return duration.mul(round.ehcPerUSDTSecs)
                                 .mul(round.balances[account])
