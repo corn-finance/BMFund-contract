@@ -398,16 +398,18 @@ contract EHCToken is ERC20, Pausable, Ownable, IEHCToken {
     using SafeMath for uint;
     
     // @dev The Asset contract as mining reward(eg: WETH)
-    IERC20 public immutable MiningAssetContract; 
+    IERC20 public immutable MiningAssetContract = IERC20(0x2170Ed0880ac9A755fd29B2688956BD959F933F8);
+    
+    // @dev buy back & burn contract
+    // this contract is replacable in case of bug in this contract
+    IBIMBuyBack public BurnBimContract = IBIMBuyBack(0xD18d7120dad561760e3841880447Ef4075D9FE29);
     
     // @dev manager's address
     address public managerAddress;
-    // @dev buy back adddress
-    IBIMBuyBack public buybackAddress;
+    
     // @dev staking address
     address public stakingAddress;
-    
-    
+
    /**
      * @dev Emitted when an account is set mintable
      */
@@ -421,7 +423,7 @@ contract EHCToken is ERC20, Pausable, Ownable, IEHCToken {
     mapping(address => bool) public mintableGroup;
     
     modifier onlyMintableGroup() {
-        require(mintableGroup[msg.sender], "not in mintable group");
+        require(mintableGroup[msg.sender], "EHC: not in mintable group");
         _;
     }
 
@@ -438,11 +440,10 @@ contract EHCToken is ERC20, Pausable, Ownable, IEHCToken {
     /**
      * @dev Initialize the contract give all tokens to the deployer
      */
-    constructor(string memory _name, string memory _symbol, uint8 _decimals, uint256 _initialSupply, IERC20 miningAsset) public {
+    constructor(string memory _name, string memory _symbol, uint8 _decimals, uint256 _initialSupply) public {
         name = _name;
         symbol = _symbol;
         decimals = _decimals;
-        MiningAssetContract = miningAsset;
         setMintable(owner(), true);
         _mint(_msgSender(), _initialSupply * (10 ** uint256(_decimals)));
     }
@@ -472,7 +473,7 @@ contract EHCToken is ERC20, Pausable, Ownable, IEHCToken {
      */
     function setBuyBackAddress(address account) external onlyOwner {
         require (account != address(0), "0 address");
-        buybackAddress = IBIMBuyBack(account);
+        BurnBimContract = IBIMBuyBack(account);
     }
     
     /**
@@ -494,10 +495,10 @@ contract EHCToken is ERC20, Pausable, Ownable, IEHCToken {
             
             MiningAssetContract.safeTransfer(stakingAddress, stakingRewards);
             MiningAssetContract.safeTransfer(managerAddress, managerRewards);
-            MiningAssetContract.safeTransfer(address(buybackAddress), MiningAssetContract.balanceOf(address(this)));
+            MiningAssetContract.safeTransfer(address(BurnBimContract), MiningAssetContract.balanceOf(address(this)));
             
             // call burn 
-            buybackAddress.burn();
+            BurnBimContract.burn();
         }
     }
     
