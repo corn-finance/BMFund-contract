@@ -245,7 +245,9 @@ contract Ownable is Context {
     }
 }
 
-
+/**
+ * @notice BIM buy back and burn
+ */
 contract BIMBuyBack is IBIMBuyBack {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
@@ -258,7 +260,7 @@ contract BIMBuyBack is IBIMBuyBack {
     address [] internal amountsOutPath = [address(ethContract), address(bimContract)];
     address [] internal swapPath = [address(bimContract), address(ethContract)];
     
-    uint constant internal MAX_SWAP_LATENCY = 600; // 10 minutes
+    uint constant internal MAX_SWAP_LATENCY = 60; // 1 minutes
     uint256 constant internal MAX_UINT256 = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
     
     bool internal approvedToRouter;
@@ -267,6 +269,7 @@ contract BIMBuyBack is IBIMBuyBack {
      * @dev burnBIM will use it's ETH to buy back bim on pancakeswap, and burn
      */
     function burn() external override {
+        // approve ETH to router
         if (!approvedToRouter) {
             ethContract.approve(address(router), MAX_UINT256);
             approvedToRouter = true;
@@ -275,7 +278,7 @@ contract BIMBuyBack is IBIMBuyBack {
         // check how many BIMs can be swapped out
         uint256 ethSwapIn = ethContract.balanceOf(address(this));
         uint [] memory amounts = router.getAmountsOut(ethSwapIn, amountsOutPath);
-        uint256 bimSwapOut = amounts[0];
+        uint256 bimSwapOut = amounts[1];
         
         // swap 
         router.swapTokensForExactTokens(bimSwapOut, ethSwapIn, swapPath, address(this), block.timestamp.add(MAX_SWAP_LATENCY));
