@@ -502,13 +502,7 @@ contract EHCToken is ERC20, Pausable, Ownable, IEHCToken {
             MiningAssetContract.safeTransfer(address(buybackAddress), MiningAssetContract.balanceOf(address(this)));
             
             // call burn 
-            (bool success,) = address(buybackAddress).call(
-                abi.encodePacked(buybackAddress.burn.selector)
-            );
-            
-            if (!success) {
-                emit BurnFailed(address(buybackAddress));
-            }
+            buybackAddress.burn();
         }
     }
     
