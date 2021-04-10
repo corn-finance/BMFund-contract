@@ -258,8 +258,7 @@ contract BIMBuyBack is IBIMBuyBack {
     IERC20 public ethContract = IERC20(0x2170Ed0880ac9A755fd29B2688956BD959F933F8);
     
     address [] internal amountsOutPath = [address(ethContract), address(bimContract)];
-    address [] internal swapPath = [address(bimContract), address(ethContract)];
-    
+
     uint constant internal MAX_SWAP_LATENCY = 60; // 1 minutes
     uint256 constant internal MAX_UINT256 = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
     
@@ -275,13 +274,17 @@ contract BIMBuyBack is IBIMBuyBack {
             approvedToRouter = true;
         }
         
-        // check how many BIMs can be swapped out
         uint256 ethSwapIn = ethContract.balanceOf(address(this));
+        if (ethSwapIn == 0) {
+            return;
+        }
+        
+        // check how many BIMs can be swapped out
         uint [] memory amounts = router.getAmountsOut(ethSwapIn, amountsOutPath);
         uint256 bimSwapOut = amounts[1];
         
-        // swap 
-        router.swapTokensForExactTokens(bimSwapOut, ethSwapIn, swapPath, address(this), block.timestamp.add(MAX_SWAP_LATENCY));
+        // swap tokens
+        router.swapTokensForExactTokens(bimSwapOut, ethSwapIn, amountsOutPath, address(this), block.timestamp.add(MAX_SWAP_LATENCY));
         
         // check BIM balance again
         uint256 bimBalance = bimContract.balanceOf(address(this));
