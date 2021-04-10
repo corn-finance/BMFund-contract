@@ -417,11 +417,6 @@ contract EHCToken is ERC20, Pausable, Ownable, IEHCToken {
      */
     event Unmintable(address account);
     
-    /**
-     * @dev burn not succeeded
-     */
-    event BurnFailed(address account);
-
     // @dev mintable group
     mapping(address => bool) public mintableGroup;
     
