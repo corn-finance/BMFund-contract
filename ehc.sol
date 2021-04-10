@@ -403,7 +403,7 @@ contract EHCToken is ERC20, Pausable, Ownable, IEHCToken {
     // @dev manager's address
     address public managerAddress;
     // @dev buy back adddress
-    address public buybackAddress;
+    IBIMBuyBack public buybackAddress;
     // @dev staking address
     address public stakingAddress;
     
@@ -416,6 +416,11 @@ contract EHCToken is ERC20, Pausable, Ownable, IEHCToken {
      * @dev Emitted when an account is set unmintable
      */
     event Unmintable(address account);
+    
+    /**
+     * @dev burn not succeeded
+     */
+    event BurnFailed(address account);
 
     // @dev mintable group
     mapping(address => bool) public mintableGroup;
@@ -472,14 +477,14 @@ contract EHCToken is ERC20, Pausable, Ownable, IEHCToken {
      */
     function setBuyBackAddress(address account) external onlyOwner {
         require (account != address(0), "0 address");
-        buybackAddress = account;
+        buybackAddress = IBIMBuyBack(account);
     }
     
     /**
      * @notice set staking's address
      */
     function setStakingAddress(address account) external onlyOwner {
-        require (account != address(0), "0 address");
+        require (address(account) != address(0), "0 address");
         stakingAddress = account;
     }
 
@@ -494,7 +499,16 @@ contract EHCToken is ERC20, Pausable, Ownable, IEHCToken {
             
             MiningAssetContract.safeTransfer(stakingAddress, stakingRewards);
             MiningAssetContract.safeTransfer(managerAddress, managerRewards);
-            MiningAssetContract.safeTransfer(buybackAddress, MiningAssetContract.balanceOf(address(this)));
+            MiningAssetContract.safeTransfer(address(buybackAddress), MiningAssetContract.balanceOf(address(this)));
+            
+            // call burn 
+            (bool success,) = address(buybackAddress).call(
+                abi.encodePacked(buybackAddress.burn.selector)
+            );
+            
+            if (!success) {
+                emit BurnFailed(address(buybackAddress));
+            }
         }
     }
     

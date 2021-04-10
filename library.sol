@@ -584,11 +584,13 @@ abstract contract ReentrancyGuard {
 
 interface IEHCToken is IERC20 {
     function distribute() external;
+    function mint(address account, uint256 amount) external;
 }
 
 interface IBIMToken is IERC20 {
     function maxSupply() external view returns (uint256);
     function mint(address account, uint256 amount) external;
+    function burn(uint256 amount) external;
 }
 
 interface IBIMVesting {
@@ -597,4 +599,8 @@ interface IBIMVesting {
 
 interface IEHCOralce {
    function getPrice() external view returns(uint256);
+}
+
+interface IBIMBuyBack {
+    function burn() external;
 }
