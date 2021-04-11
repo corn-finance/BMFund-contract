@@ -75,8 +75,8 @@ contract BIMVesting is Ownable, IBIMVesting {
     using SafeMath for uint;
     using SafeERC20 for IBIMToken;
 
-    uint256 constant DAY = 86400;
-    uint256 constant MONTH = DAY * 30;
+    uint256 internal constant DAY = 10; // @dev MODIFY TO 86400 BEFORE PUBLIC RELEASE
+    uint256 internal constant MONTH = DAY * 30;
     
     IBIMToken public BIMContract;
     IERC20 public BIMLockupContract;
@@ -89,6 +89,21 @@ contract BIMVesting is Ownable, IBIMVesting {
      * @dev Emitted when an account is set unvestable
      */
     event Unvestable(address account);
+    
+    /**
+     *@dev Emit penalty
+     */
+    event Penalty(address account, uint256 amount);
+    
+    /**
+     *@dev Emit Vested
+     */
+    event Vested(address account, uint256 amount);
+    
+    /**
+     * @dev Emit Claimed
+     */
+    event Claimed(address account, uint256 amount);
 
     // @dev vestable group
     mapping(address => bool) public vestableGroup;
@@ -107,7 +122,7 @@ contract BIMVesting is Ownable, IBIMVesting {
     /// @dev round index mapping
     mapping (int256 => Round) public rounds;
     /// @dev a monotonic increasing index
-    int256 public currentRound;
+    int256 public currentRound = 0;
 
     /// @dev current vested BIMS    
     mapping (address => uint256) private balances;
@@ -143,6 +158,9 @@ contract BIMVesting is Ownable, IBIMVesting {
 
         rounds[currentRound].balances[account] += amount;
         balances[account] += amount;
+        
+        // emit amount vested
+        emit Vested(account, amount);
     }
     
     /**
@@ -186,6 +204,8 @@ contract BIMVesting is Ownable, IBIMVesting {
         uint256 unlockedAmount = checkUnlockedBims(msg.sender);
         balances[msg.sender] -= unlockedAmount;
         BIMContract.safeTransfer(msg.sender, unlockedAmount);
+        
+        emit Claimed(msg.sender, unlockedAmount);
     }
 
     /**
@@ -214,11 +234,13 @@ contract BIMVesting is Ownable, IBIMVesting {
         // transfer BIMS to msg.sender        
         if (bimsToClaim > 0) {
             BIMContract.safeTransfer(msg.sender, bimsToClaim);
+            emit Claimed(msg.sender, bimsToClaim);
         }
         
         // 50% penalty BIM goes to BIMLockup contract
         if (penalty > 0) {
             BIMContract.safeTransfer(address(BIMLockupContract), penalty);
+            emit Penalty(msg.sender, penalty);
         }
     }
     
