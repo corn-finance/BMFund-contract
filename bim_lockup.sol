@@ -253,7 +253,7 @@ contract BIMLockup is Ownable {
         
         // block rewards
         uint bimsToMint;
-        if (BIMContract.maxSupply() < BIMContract.totalSupply()) {
+        if (BIMContract.maxSupply() > BIMContract.totalSupply()) {
             uint blocksToReward = block.number.sub(_lastBIMRewardBlock);
             bimsToMint = BIMBlockReward.mul(blocksToReward);
             uint remain = BIMContract.maxSupply().sub(BIMContract.totalSupply());
@@ -334,8 +334,10 @@ contract BIMLockup is Ownable {
 
         // compute new BIMS received since last updateBIMRound this also re-distributes BIM-penalty received from:
         // BIMVesting Contract (early exit)
+        //
+        // As contract balance consists only of user's locked up assets and UNCLAIMED reward BIMS.
         // Formula:
-        // newReward = contract balance - _totalLockedUp - _BIMUnclaimed
+        //  newReward = contract balance - _totalLockedUp - _BIMUnclaimed
         uint bimToReward = BIMContract.balanceOf(address(this)).sub(_totalLockedUp).sub(_BIMUnclaimed);
         if (bimToReward == 0) {
             return;
