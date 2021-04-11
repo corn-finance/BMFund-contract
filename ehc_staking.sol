@@ -100,12 +100,6 @@ contract EHCStaking is Ownable, ReentrancyGuard {
     /// @dev record unclaimed ETH
     uint256 private _ethersUnclaimed;
 
-    // events
-    event Deposit(address account, uint256 amount);
-    event Withdraw(address account, uint256 amount);
-    event BIMClaimed(address account, uint256 amount);
-    event EthersClaimed(address account, uint256 amount);
-    
     constructor(IERC20 ethContract, IBIMToken bimContract, IEHCToken ehcToken, IBIMVesting bimVesting) 
         public {
         ETHContract = ethContract;
@@ -411,4 +405,15 @@ contract EHCStaking is Ownable, ReentrancyGuard {
         // next round setting                                 
         _currentBIMRound++;
     }
+    
+        
+    /**
+     * @dev Events
+     * ----------------------------------------------------------------------------------
+     */
+     
+    event Deposit(address account, uint256 amount);
+    event Withdraw(address account, uint256 amount);
+    event BIMClaimed(address account, uint256 amount);
+    event EthersClaimed(address account, uint256 amount);
 }

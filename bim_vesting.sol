@@ -81,30 +81,6 @@ contract BIMVesting is Ownable, IBIMVesting {
     IBIMToken public BIMContract;
     IERC20 public BIMLockupContract;
 
-    /**
-     * @dev Emitted when an account is set vestable
-     */
-    event Vestable(address account);
-    /**
-     * @dev Emitted when an account is set unvestable
-     */
-    event Unvestable(address account);
-    
-    /**
-     *@dev Emit penalty
-     */
-    event Penalty(address account, uint256 amount);
-    
-    /**
-     *@dev Emit Vested
-     */
-    event Vested(address account, uint256 amount);
-    
-    /**
-     * @dev Emit Claimed
-     */
-    event Claimed(address account, uint256 amount);
-
     // @dev vestable group
     mapping(address => bool) public vestableGroup;
     
@@ -254,4 +230,16 @@ contract BIMVesting is Ownable, IBIMVesting {
             rounds[currentRound].startDate = rounds[currentRound-1].startDate + numDays * DAY;
         }
     }
+    
+    /**
+     * @dev Events
+     * ----------------------------------------------------------------------------------
+     */
+     
+    event Vestable(address account);
+    event Unvestable(address account);
+    event Penalty(address account, uint256 amount);
+    event Vested(address account, uint256 amount);
+    event Claimed(address account, uint256 amount);
+    
 }

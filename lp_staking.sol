@@ -87,10 +87,6 @@ contract LPStaking is Ownable, ReentrancyGuard {
     mapping (address => uint256) private _balances; // staker's balance
     uint256 private _totalStaked; // sum of balance
     
-    event Deposit(address account, uint256 amount);
-    event Withdraw(address account, uint256 amount);
-    event BIMClaimed(address account, uint256 amount);
-
     constructor(IBIMToken bimContract, IERC20 lpToken, IBIMVesting bimVesting) 
         public {
         BIMContract = bimContract;
@@ -293,4 +289,14 @@ contract LPStaking is Ownable, ReentrancyGuard {
         // next round setting                                 
         _currentBIMRound++;
     }
+    
+        
+    /**
+     * @dev Events
+     * ----------------------------------------------------------------------------------
+     */
+     
+    event Deposit(address account, uint256 amount);
+    event Withdraw(address account, uint256 amount);
+    event BIMClaimed(address account, uint256 amount);
 }
