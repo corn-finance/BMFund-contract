@@ -128,7 +128,10 @@ contract BIMLockup is Ownable {
      */
     function lockup(uint256 amount) external {
         updateWeek();
-
+        
+        // settle the caller's previous BIM rewards before account balance change
+        settleStakerBIMReward(msg.sender);
+        
         // transfer BIM from msg.sender
         BIMContract.safeTransferFrom(msg.sender, address(this), amount);
         // group deposits in current week to avert unbounded gas consumption in withdraw
@@ -147,6 +150,9 @@ contract BIMLockup is Ownable {
 
         uint256 unlockedAmount = checkUnlocked(msg.sender);
         require(unlockedAmount > 0, "0 unlocked");
+                
+        // settle the caller's previous BIM rewards before account balance change
+        settleStakerBIMReward(msg.sender);
 
         // modify sender's overall lockup balance only
         _balances[msg.sender] -= unlockedAmount;
