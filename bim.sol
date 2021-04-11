@@ -462,9 +462,8 @@ contract BIMToken is ERC20, Pausable, Ownable, IBIMToken {
      * - `to` cannot be the zero address.
      */
     function mint(address account, uint256 amount) public override onlyMintableGroup {
-        if (totalSupply() + amount <= MAX_SUPPLY) {
-            _mint(account, amount);
-        }
+        require(totalSupply() + amount <= MAX_SUPPLY, "reached max supply");
+        _mint(account, amount);
     }
     
     /**
