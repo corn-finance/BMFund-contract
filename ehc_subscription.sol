@@ -145,6 +145,7 @@ contract EHCSubscription is Ownable {
         update();
         
         // make sure round is currentRound
+        require (currentRound <= r, "invalid round");
         require (currentRound == r, "round expired");
         // make sure we are still in subscription period
         Round storage round = rounds[r];
