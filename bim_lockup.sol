@@ -146,6 +146,7 @@ contract BIMLockup is Ownable {
         updateWeek();
 
         uint256 unlockedAmount = checkUnlocked(msg.sender);
+        require(unlockedAmount > 0, "0 unlocked");
 
         // modify sender's overall lockup balance only
         _balances[msg.sender] -= unlockedAmount;
