@@ -97,8 +97,8 @@ contract EHCStaking is Ownable, ReentrancyGuard {
     mapping (address => uint) private _settledETHRounds;
     /// @dev a monotonic increasing round index, STARTS FROM 1
     uint256 private _currentETHRound = 1;
-    /// @dev last ETH balance
-    uint256 private _lastETHBalance;
+    /// @dev record unclaimed ETH
+    uint256 private _ethersUnclaimed;
     
     /**
      * @dev BIM Rewarding
@@ -122,7 +122,6 @@ contract EHCStaking is Ownable, ReentrancyGuard {
         BIMContract = bimContract;
         EHCTokenContract = ehcToken;
         BIMVestingContract = bimVesting;
-        _lastETHBalance = ethContract.balanceOf(address(this));
     }
     
     /**
@@ -180,8 +179,8 @@ contract EHCStaking is Ownable, ReentrancyGuard {
         // transfer ETH to sender
         ETHContract.safeTransfer(msg.sender, ethers);
         
-        // IMPORTANT: update ETH balance due to transfer
-        _lastETHBalance = ETHContract.balanceOf(address(this));
+        // track unclaimed ethers
+        _ethersUnclaimed -= ethers;
     }
     
     /**
@@ -232,14 +231,14 @@ contract EHCStaking is Ownable, ReentrancyGuard {
         uint lastSettledRound = _settledETHRounds[account];
         uint unsettledShare = _accETHShares[_currentETHRound-1].sub(_accETHShares[lastSettledRound]);
         
-        uint balanceDiff = ETHContract.balanceOf(address(this)).sub(_lastETHBalance);
-        uint newETHRewards = ETHContract.balanceOf(address(EHCTokenContract)).mul(70).div(100);
+        uint balanceDiff = ETHContract.balanceOf(address(this)).sub(_ethersUnclaimed); // received from nowhere, but not settled
+        uint undistributedEthers = ETHContract.balanceOf(address(EHCTokenContract)).mul(70).div(100); // still in EHCTokenContract
         
         uint newShare;
         if (_totalStaked > 0) {
-            newShare = newETHRewards.add(balanceDiff)
-                                    .mul(SHARE_MULTIPLIER)
-                                    .div(_totalStaked);
+            newShare = undistributedEthers.add(balanceDiff)
+                                            .mul(SHARE_MULTIPLIER)
+                                            .div(_totalStaked);
         }
         
         return _ethBalance[account] + (unsettledShare + newShare)
@@ -306,7 +305,7 @@ contract EHCStaking is Ownable, ReentrancyGuard {
         EHCTokenContract.distribute();
         
         // check diff with previous ETH balance
-        uint balanceDiff = ETHContract.balanceOf(address(this)).sub(_lastETHBalance);
+        uint balanceDiff = ETHContract.balanceOf(address(this)).sub(_ethersUnclaimed);
         if (balanceDiff == 0) {
             return;
         }
@@ -322,8 +321,8 @@ contract EHCStaking is Ownable, ReentrancyGuard {
         // next round setting                                 
         _currentETHRound++;
         
-        // update ETH balance
-        _lastETHBalance = ETHContract.balanceOf(address(this));
+        // update unclaimed ethers
+        _ethersUnclaimed += balanceDiff;
     }
     
     /**
