@@ -140,6 +140,9 @@ contract BIMLockup is Ownable {
         _balances[msg.sender] += amount;
         // bookkeeping total locked BIMs
         _totalLockedUp += amount;
+        
+        // log
+        emit Lockup(msg.sender, amount);
     }
     
     /**
@@ -162,6 +165,9 @@ contract BIMLockup is Ownable {
         
         // transfer unlocked amount
         BIMContract.safeTransfer(msg.sender, unlockedAmount);
+        
+        // log
+        emit Withdraw(msg.sender, unlockedAmount);
     }
     
     /**
@@ -248,6 +254,9 @@ contract BIMLockup is Ownable {
         
         // transfer BIM
         BIMContract.safeTransfer(msg.sender, bims);
+        
+        // log
+        emit BIMClaimed(msg.sender, bims);
     }
     
     /**
@@ -363,4 +372,13 @@ contract BIMLockup is Ownable {
         // next round setting                                 
         _currentBIMRound++;
     }
+    
+    /**
+     * @dev Events
+     * ----------------------------------------------------------------------------------
+     */
+     
+    event Lockup(address account, uint256 amount);
+    event Withdraw(address account, uint256 amount);
+    event BIMClaimed(address account, uint256 amount);
 }
