@@ -100,6 +100,12 @@ contract EHCStaking is Ownable, ReentrancyGuard {
     /// @dev record unclaimed ETH
     uint256 private _ethersUnclaimed;
 
+    // events
+    event Deposit(address account, uint256 amount);
+    event Withdraw(address account, uint256 amount);
+    event BIMClaimed(address account, uint256 amount);
+    event EthersClaimed(address account, uint256 amount);
+    
     constructor(IERC20 ethContract, IBIMToken bimContract, IEHCToken ehcToken, IBIMVesting bimVesting) 
         public {
         ETHContract = ethContract;
@@ -121,6 +127,9 @@ contract EHCStaking is Ownable, ReentrancyGuard {
         
         _balances[msg.sender] += amount;
         _totalStaked += amount;
+                
+        // log
+        emit Deposit(msg.sender, amount);
     }
     
     /**
@@ -139,6 +148,9 @@ contract EHCStaking is Ownable, ReentrancyGuard {
         
         // transfer EHC back to msg.sender
         EHCTokenContract.safeTransfer(msg.sender, amount);
+                
+        // log
+        emit Withdraw(msg.sender, amount);
     }
     
     /**
@@ -165,6 +177,9 @@ contract EHCStaking is Ownable, ReentrancyGuard {
         
         // track unclaimed ethers
         _ethersUnclaimed -= ethers;
+        
+        // log
+        emit EthersClaimed(msg.sender, ethers);
     }
 
     /**
@@ -301,6 +316,9 @@ contract EHCStaking is Ownable, ReentrancyGuard {
         
         // vest new minted BIM
         BIMVestingContract.vest(msg.sender, bims);
+        
+        // log
+        emit BIMClaimed(msg.sender, bims);
     }
     
     /**
