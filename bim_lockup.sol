@@ -75,16 +75,16 @@ contract BIMLockup is Ownable {
     using SafeMath for uint;
     using SafeERC20 for IBIMToken;
 
-    uint256 constant DAY = 86400;
-    uint256 constant WEEK = DAY * 7;
-    uint256 constant MONTH = DAY * 30;
+    uint256 internal constant DAY = 10; // @dev MODIFY TO 86400 BEFORE PUBLIC RELEASE
+    uint256 internal constant WEEK = DAY * 7;
+    uint256 internal constant MONTH = DAY * 30;
     
     IBIMToken public BIMContract;
     
     // @dev lockup assets deposits are grouped by week
     struct Round {
-        mapping (address => uint256) balances;
-        uint vestFrom;
+        mapping (address => uint256) balances; // weekly user's lockup
+        uint vestFrom; // [vestfrom -- MONTH -- releaseday]
     }
     
     /// @dev rounds indexing
@@ -92,7 +92,7 @@ contract BIMLockup is Ownable {
     /// @dev a monotonic increasing index
     int256 public currentRound = 0;
 
-    /// @dev lockup balance
+    /// @dev lockup balance for all rounds sumed
     mapping (address => uint256) private _balances;
     
     /// @dev total locked-up
@@ -107,26 +107,23 @@ contract BIMLockup is Ownable {
     /**
      * @dev function called before every user's interaction
      */
-    function beforeBalanceChange() internal {
+    function beforeContractBIMChange() internal {
         // create a new weekly round for deposit if recent week ends.
         if (block.timestamp > rounds[currentRound].vestFrom) {
             currentRound++;
-            // new week starts
+            // lockups are grouped weekly
             rounds[currentRound].vestFrom = rounds[currentRound-1].vestFrom + WEEK;
         }
-        
-        // settle the caller before any lockup balance changes
-        settleStakerBIMReward(msg.sender);
+
     }
     
     /**
      * @dev function called after balance changes
      */
-    function afterBalanceChange() internal {
+    function afterContractBIMChange() internal {
         // update contract's BIM balance after deposit or withdraw
         _lastBIMBalance = BIMContract.balanceOf(address(this));
     }
-    
     
     /**
      * @dev return total value locked
@@ -136,42 +133,69 @@ contract BIMLockup is Ownable {
     }
     
     /**
-     * @dev deposit BIM
+     * @dev lockup BIM
      */
-    function deposit(uint256 amount) external {
-        beforeBalanceChange();
-                
+    function lockup(uint256 amount) external {
+        beforeContractBIMChange();
+        
+        // settle the caller before any user's lockup balance changes
+        settleStakerBIMReward(msg.sender);
+        
         // transfer BIM from msg.sender
         BIMContract.safeTransferFrom(msg.sender, address(this), amount);
         // group deposits in current week to avert unbounded gas consumption in withdraw
         rounds[currentRound].balances[msg.sender] += amount;
-        // modify sender's balance
+        // modify sender's overall lockup balance
         _balances[msg.sender] += amount;
-        // sum up total locked BIMs
+        // bookkeeping total locked BIMs
         _totalLockedUp += amount;
 
-        afterBalanceChange();
+        afterContractBIMChange();
     }
     
     /**
-     * @dev check bims
+     * @dev withdraw BIM previously(1 month ago) deposited
      */
-    function checkBims(address account) public view returns(uint256) {
+    function withdraw() external {
+        beforeContractBIMChange();
+        
+        // settle the caller's BIM before any user's lockup balance changes
+        settleStakerBIMReward(msg.sender);
+        
+        uint256 unlockedAmount = checkUnlocked(msg.sender);
+
+        // modify sender's overall lockup balance only
+        _balances[msg.sender] -= unlockedAmount;
+        
+        // sub total locked up
+        _totalLockedUp -= unlockedAmount;
+        
+        // transfer unlocked amount
+        BIMContract.safeTransfer(msg.sender, unlockedAmount);
+        
+        afterContractBIMChange();
+    }
+    
+    /**
+     * @dev check lockup balance
+     */
+    function checkLockupBalance(address account) public view returns(uint256) {
         return _balances[account];
     }
     
     /**
-     * @dev get locked value
+     * @dev get value still locked up
      */
     function checkLocked(address account) public view returns(uint256) {
         uint256 monthAgo = block.timestamp - MONTH;
 
-        // this loop is bounded to 30days/7days by checking vestFrom
+        // this loop is bounded to: N = 30days/7days + 1 = 5
         uint256 lockedAmount;
         for (int256 i= currentRound; i>=0; i--) {
             if (rounds[i].vestFrom < monthAgo) {
                 break;
             } else {
+                // sum weekly balance
                 lockedAmount += rounds[i].balances[account];
             }
         }
@@ -186,28 +210,9 @@ contract BIMLockup is Ownable {
         uint256 lockedAmount = checkLocked(account);
         return _balances[account].sub(lockedAmount);
     }
-    
-    /**
-     * @dev withdraw BIM previously(1 month ago) deposited
-     */
-    function withdraw() external {
-        beforeBalanceChange();
-                
-        uint256 unlockedAmount = checkUnlocked(msg.sender);
-
-        // modify
-        _balances[msg.sender] -= unlockedAmount;
-        // sub total locked up
-        _totalLockedUp -= unlockedAmount;
-        
-        // transfer unlocked amount
-        BIMContract.safeTransfer(msg.sender, unlockedAmount);
-        
-        afterBalanceChange();
-    }
 
     /**
-     * @dev BIM Rewarding
+     * @dev BIM Rewarding is based on block.number
      * ----------------------------------------------------------------------------------
      */
      
@@ -240,10 +245,10 @@ contract BIMLockup is Ownable {
     }
     
     /**
-     * @dev claim bonus BIMs
+     * @dev claim bonus BIMs for msg.sender
      */
     function claimBIMReward() external {
-        beforeBalanceChange();
+        beforeContractBIMChange();
         
         // BIM balance modification
         uint bims = _bimBalance[msg.sender];
@@ -252,11 +257,11 @@ contract BIMLockup is Ownable {
         // transfer BIM
         BIMContract.safeTransfer(msg.sender, bims);
         
-        afterBalanceChange();
+        afterContractBIMChange();
     }
     
     /**
-     * @notice sum unclaimed rewards;
+     * @notice sum unclaimed rewards for an account
      */
     function checkBIMReward(address account) external view returns(uint256 bim) {
         // reward = settled + unsettled + newMined + balance diff

@@ -73,9 +73,9 @@ contract EHCSubscription is Ownable {
     using SafeERC20 for IEHCToken;
     using SafeERC20 for IERC20;
 
-    uint256 constant DAY = 10; // @dev MODIFY TO 86400 BEFORE PUBLIC RELEASE
-    uint256 constant WEEK = DAY * 7;
-    uint256 constant MONTH = DAY * 30;
+    uint256 internal constant DAY = 10; // @dev MODIFY TO 86400 BEFORE PUBLIC RELEASE
+    uint256 internal constant WEEK = DAY * 7;
+    uint256 internal constant MONTH = DAY * 30;
     uint256 internal constant SHARE_MULTIPLIER = 1e18; // share multiplier to avert division underflow
     uint256 internal constant PRICE_UNIT = 1e18; // PRICE_UNIT for 1 EHC
 
