@@ -95,7 +95,7 @@ contract EHCSubscription is Ownable {
         uint256 totalUSDTS; // sum of balances
 
         // fields set after subscription settlement
-        bool hasSettled; // mark if subscription ends
+        bool subEnded; // mark if subscription ends
         uint256 refundPerUSDT; // USDTS to refund for over subscription
         uint256 ehcPerUSDTSecs; // EHC per USDTS per seconds
 
@@ -147,7 +147,7 @@ contract EHCSubscription is Ownable {
         require (currentRound == r, "round expired");
         // make sure we are still in subscription period
         Round storage round = rounds[r];
-        require (!round.hasSettled, "subscription ended");
+        require (!round.subEnded, "subscription ended");
         
         // transfer USDT to this round
         USDTContract.safeTransferFrom(msg.sender, address(this), amountUSDT);
@@ -235,7 +235,7 @@ contract EHCSubscription is Ownable {
      */
     function settleRound(address account, int256 r) internal {
         Round storage round = rounds[r];
-        if (round.hasSettled) {
+        if (round.subEnded) {
             // EHC settlement
             uint256 ehc = checkRoundEHC(account, r);
             _ehcBalance[account] += ehc;
@@ -254,7 +254,7 @@ contract EHCSubscription is Ownable {
     function update() public {
         // check subscription ends and need settlement
         Round storage round = rounds[currentRound];
-        if (block.timestamp > round.startTime + WEEK && !round.hasSettled) {
+        if (block.timestamp > round.startTime + WEEK && !round.subEnded) {
             // maximum USDTs
             uint256 capUSDTS = round.mintCap.mul(round.price)
                                             .div(PRICE_UNIT);
@@ -293,8 +293,8 @@ contract EHCSubscription is Ownable {
                 EHCToken.mint(address(this), ehcToMint);
             }
             
-            // mark settled
-            round.hasSettled = true;
+            // mark subscription ends
+            round.subEnded = true;
             
         } else if (block.timestamp > round.startTime + MONTH) { // new round initiate
             currentRound++;
@@ -318,6 +318,7 @@ contract EHCSubscription is Ownable {
         RoundIndex storage idx = _roundIndices[msg.sender];
         amount += checkRoundEHC(account, idx.prev);
         amount += checkRoundEHC(account, idx.lastest);
+        amount += _ehcBalance[account];
     }
     
     /**
@@ -327,6 +328,7 @@ contract EHCSubscription is Ownable {
         RoundIndex storage idx = _roundIndices[msg.sender];
         amount += checkRoundRefund(account, idx.prev);
         amount += checkRoundRefund(account, idx.lastest);
+        amount += _refundBalance[account];
     }
         /**
      * @dev check existing refund on round r 
