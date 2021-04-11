@@ -362,23 +362,22 @@ contract EHCStaking is Ownable, ReentrancyGuard {
             return;
         }
         
-        // has reached maximum mintable BIM 
-        if (BIMContract.maxSupply() == BIMContract.totalSupply()) {
-            return;
-        }
-
-        // mint BIM for (_lastRewardBlock, block.number]
-        uint blocksToReward = block.number.sub(_lastBIMRewardBlock);
-        uint bimsToMint = BIMBlockReward.mul(blocksToReward);
-        uint remain = BIMContract.maxSupply().sub(BIMContract.totalSupply());
-        // cap to BIM max supply
-        if (remain < bimsToMint) {
-            bimsToMint = remain;
-        }
-        
-        if (bimsToMint > 0) {
-            // BIM mint to BIMVestingContract
-            BIMContract.mint(address(BIMVestingContract), bimsToMint);
+        // mint BIM
+        uint bimsToMint;
+        if (BIMContract.maxSupply() > BIMContract.totalSupply()) {
+            // mint BIM for (_lastRewardBlock, block.number]
+            uint blocksToReward = block.number.sub(_lastBIMRewardBlock);
+            bimsToMint = BIMBlockReward.mul(blocksToReward);
+            uint remain = BIMContract.maxSupply().sub(BIMContract.totalSupply());
+            // cap to BIM max supply
+            if (remain < bimsToMint) {
+                bimsToMint = remain;
+            }
+            
+            if (bimsToMint > 0) {
+                // BIM mint to BIMVestingContract
+                BIMContract.mint(address(BIMVestingContract), bimsToMint);
+            }
         }
 
         // BIM share
