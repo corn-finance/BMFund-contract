@@ -115,6 +115,7 @@ contract EHCSubscription is Ownable {
     mapping (address => uint256) internal _ehcBalance; 
     
     /// @dev a struct to keep at most 2 round index for a user
+    // 2 rounds before current round can be settled permanently.(all EHC released).
     struct RoundIndex {
         int256 prev;
         int256 lastest;
@@ -131,7 +132,7 @@ contract EHCSubscription is Ownable {
         USDTContract = usdtContract;
         EHCOracle = oracle;
         
-        // setting round 0 
+        // setting round 1
         rounds[currentRound].startTime = block.timestamp;
         rounds[currentRound].price = EHCOracle.getPrice();
         rounds[currentRound].mintCap = EHCToken.totalSupply().mul(25).div(100);
@@ -140,7 +141,7 @@ contract EHCSubscription is Ownable {
     /**
      * @dev deposit USDT to receive EHC
      */
-    function subscribe(int256 r, uint256 amountUSDT) external returns(bool) {
+    function subscribe(int256 r, uint256 amountUSDT) external {
         update();
         
         // make sure round is currentRound
@@ -149,43 +150,35 @@ contract EHCSubscription is Ownable {
         Round storage round = rounds[r];
         require (!round.subEnded, "subscription ended");
         
-        // transfer USDT to this round
+        // transfer USDT to this contract and finish bookkeeping.
         USDTContract.safeTransferFrom(msg.sender, address(this), amountUSDT);
         round.balances[msg.sender] += amountUSDT;
         round.totalUSDTS += amountUSDT;
         
-        // try to settle previously unclaimed EHC
         RoundIndex storage idx = _roundIndices[msg.sender];
         if (idx.lastest != currentRound) {
-            // release previous EHC to balance
+            // idx.prev will be 2 rounds before current round
+            // settle ANY unreleased EHC and refund to account balance
             settleRound(msg.sender, idx.prev);
             
             // make a shifting, by always keep idx.lastest to current round
             //
-            // [prev, latest] <- currentRound 
+            // [prev, latest] <--- currentRound 
             // ----> prev [lastest, currentRound]
             // 
-            // 'prev' poped out (EHC already all released).
+            // 'prev' poped out.
             idx.prev = idx.lastest;
             idx.lastest = currentRound;
         }
-        
-        return true;
     }
     
     /**
      * @dev owner claim confirmed USDTs
      */
     function claimConfirmedUSDT() external onlyOwner {
-        uint256 confirmed = confirmedUSDTs;
-        // extra check for possible rounding problem
-        if (USDTContract.balanceOf(owner()) < confirmed) {
-            confirmed = USDTContract.balanceOf(owner());
-        }
-        
-        // transfer confirmed amount
-        USDTContract.safeTransfer(owner(), confirmed);
-        confirmedUSDTs -= confirmed;
+        uint256 amount = confirmedUSDTs;
+        USDTContract.safeTransfer(owner(), amount);
+        delete confirmedUSDTs;
     }
     
     /**
@@ -204,7 +197,7 @@ contract EHCSubscription is Ownable {
         uint256 amount = _ehcBalance[msg.sender];
         delete _ehcBalance[msg.sender];
         
-        // send back
+        // send back EHC
         EHCToken.safeTransfer(msg.sender, amount);
     }
     
@@ -230,8 +223,8 @@ contract EHCSubscription is Ownable {
         
     /**
      * @dev 
-     * 1. try release any EHC on round r based on timestamp
-     * 2. settle refund USDTS
+     * 1. try release any EHC on round r based on timestamp to _ehcBalance
+     * 2. try settle refund USDTS to _refundBalance
      */
     function settleRound(address account, int256 r) internal {
         Round storage round = rounds[r];
@@ -254,48 +247,49 @@ contract EHCSubscription is Ownable {
     function update() public {
         // check subscription ends and need settlement
         Round storage round = rounds[currentRound];
-        if (block.timestamp > round.startTime + WEEK && !round.subEnded) {
-            // maximum USDTs
-            uint256 capUSDTS = round.mintCap.mul(round.price)
-                                            .div(PRICE_UNIT);
-            
-            uint256 ehcToMint;
-            
-            // over subscribed, set refundPerUSDT
-            if (round.totalUSDTS > capUSDTS) {
-                // set to: (totalUSDT - capUSDT) / totalUSDT
-                round.refundPerUSDT = round.totalUSDTS.sub(capUSDTS)
-                                                        .mul(SHARE_MULTIPLIER)  // NOTE: refund share has multiplied by SHARE_MULTIPLIER
-                                                        .div(round.totalUSDTS);
+        if (!round.subEnded) { // still in subscription period
+            if (block.timestamp > round.startTime + WEEK) { // end subscription period
+                // maximum USDTs
+                uint256 capUSDTS = round.mintCap.mul(round.price)
+                                                .div(PRICE_UNIT);
                 
-                // set ehc to mint to maximum                                             
-                ehcToMint = round.mintCap;
-
-                // record USDT earned to capUSDTS;
-                confirmedUSDTs += capUSDTS;
-            } else {
-                // set ehc to mint by total USDT
-                ehcToMint = round.totalUSDTS.mul(PRICE_UNIT)
-                                            .div(round.price);
+                uint256 ehcToMint;
                 
-                // record USDT earned to total received
-                confirmedUSDTs += round.totalUSDTS;
+                // over subscribed, set refundPerUSDT
+                if (round.totalUSDTS > capUSDTS) {
+                    // set to: (totalUSDT - capUSDT) / totalUSDT
+                    round.refundPerUSDT = round.totalUSDTS.sub(capUSDTS)
+                                                            .mul(SHARE_MULTIPLIER)  // NOTE: refund share has multiplied by SHARE_MULTIPLIER
+                                                            .div(round.totalUSDTS);
+                    
+                    // set ehc to mint to maximum                                             
+                    ehcToMint = round.mintCap;
+    
+                    // record USDT earned to capUSDTS;
+                    confirmedUSDTs += capUSDTS;
+                } else {
+                    // set ehc to mint by total USDT
+                    ehcToMint = round.totalUSDTS.mul(PRICE_UNIT)
+                                                .div(round.price);
+                    
+                    // record USDT earned to total received
+                    confirmedUSDTs += round.totalUSDTS;
+                }
+                
+                // check 0 subscription before setting share
+                if (round.totalUSDTS > 0) {
+                    // set EHC share per totalUSDTS per seconds
+                    round.ehcPerUSDTSecs = ehcToMint.mul(SHARE_MULTIPLIER) // NOTE: ehcPerUSDTSecs has multiplied by SHARE_MULTIPLIER
+                                                    .div(round.totalUSDTS)
+                                                    .div(MONTH);
+                    
+                    // mint EHC to this contract
+                    EHCToken.mint(address(this), ehcToMint);
+                }
+                
+                // mark subscription ends
+                round.subEnded = true;
             }
-            
-            // check 0 subscription before setting share
-            if (round.totalUSDTS > 0) {
-                // set EHC share per totalUSDTS per seconds
-                round.ehcPerUSDTSecs = ehcToMint.mul(SHARE_MULTIPLIER) // NOTE: ehcPerUSDTSecs has multiplied by SHARE_MULTIPLIER
-                                                .div(round.totalUSDTS)
-                                                .div(MONTH);
-                
-                // mint EHC to this contract
-                EHCToken.mint(address(this), ehcToMint);
-            }
-            
-            // mark subscription ends
-            round.subEnded = true;
-            
         } else if (block.timestamp > round.startTime + MONTH) { // new round initiate
             currentRound++;
             
@@ -330,7 +324,8 @@ contract EHCSubscription is Ownable {
         amount += checkRoundRefund(account, idx.lastest);
         amount += _refundBalance[account];
     }
-        /**
+    
+    /**
      * @dev check existing refund on round r 
      */
     function checkRoundRefund(address account, int256 r) internal view returns(uint256 refund) {
