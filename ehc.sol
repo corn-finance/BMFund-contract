@@ -400,12 +400,19 @@ contract EHCToken is ERC20, Pausable, Ownable, IEHCToken {
     using SafeERC20 for IERC20;
     using SafeMath for uint;
     
-    // @dev The Asset contract as mining reward(eg: WETH)
-    IERC20 public immutable MiningAssetContract = IERC20(0x2170Ed0880ac9A755fd29B2688956BD959F933F8);
-    
+    // @dev The Asset contract as mining reward: ETH on bsc mainnet
+    //IERC20 public immutable MiningAssetContract = IERC20(0x2170Ed0880ac9A755fd29B2688956BD959F933F8);
+
+    // dummy asset on rinkeby
+    IERC20 public immutable MiningAssetContract = IERC20(0xDae124171F8aaFA6E64c802fb7e39Bb3e1bF2732);
+
     // @dev buy back & burn contract
     // this contract is replacable in case of bug in this contract
-    IBIMBuyBack public BurnBimContract = IBIMBuyBack(0xD18d7120dad561760e3841880447Ef4075D9FE29);
+    //IBIMBuyBack public BurnBimContract = IBIMBuyBack(0xD18d7120dad561760e3841880447Ef4075D9FE29);
+
+    // dummy contract on rinkeby
+    IBIMBuyBack public BurnBimContract = IBIMBuyBack(0x4786a33C492d865fF5af11c7BA7D7Fc1bB17bC13);
+
     
     // @dev manager's address
     address public managerAddress;
