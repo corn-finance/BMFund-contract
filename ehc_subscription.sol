@@ -63,6 +63,9 @@ contract EHCSubscription is Ownable {
     /// @dev contract confirmed USDTS
     uint256 public confirmedUSDTs;
     
+    /// @dev MINT_CAP
+    uint256 public MINT_CAP = 25;
+    
     constructor(IEHCToken ehcToken, IERC20 usdtContract, IEHCOralce oracle) public {
         EHCToken = ehcToken;
         USDTContract = usdtContract;
@@ -71,7 +74,15 @@ contract EHCSubscription is Ownable {
         // setting round 1
         rounds[currentRound].startTime = block.timestamp;
         rounds[currentRound].price = EHCOracle.getPrice();
-        rounds[currentRound].mintCap = EHCToken.totalSupply().mul(25).div(100);
+        rounds[currentRound].mintCap = EHCToken.totalSupply().mul(MINT_CAP).div(100);
+    }
+    
+    /**
+     * @dev set mint cap
+     */
+    function setMintCap(uint256 cap) external onlyOwner {
+        MINT_CAP = cap;
+        emit MintCapSet(msg.sender, cap);
     }
     
     /**
@@ -233,7 +244,7 @@ contract EHCSubscription is Ownable {
             // set new round parameters
             rounds[currentRound].startTime = rounds[currentRound-1].startTime + MONTH;
             rounds[currentRound].price = EHCOracle.getPrice();
-            rounds[currentRound].mintCap = EHCToken.totalSupply().mul(25).div(100);
+            rounds[currentRound].mintCap = EHCToken.totalSupply().mul(MINT_CAP).div(100);
         }
     }
     
@@ -309,4 +320,11 @@ contract EHCSubscription is Ownable {
     function checkRoundSubscription(address account, int256 r) external view returns(uint256) {
         return rounds[r].balances[account];
     }
+    
+    /**
+     * @dev Events
+     * ----------------------------------------------------------------------------------
+     */
+     
+    event MintCapSet(address account, uint256 cap);
 }
