@@ -18,6 +18,14 @@ contract BIMLockup is Ownable {
     IBIMToken public BIMContract;
     
     // @dev lockup assets deposits are grouped by week
+    // rounds works akin to sliding window:
+    //
+    // R1, R2, R3..... [Rn, Rn+1, ... Rm]
+    // 
+    // Rn-> Rm is locked, and Rn will be unlocked -- like window shifts in next week, as:
+    //
+    // R1, R2, R3..... Rn, [Rn+1, Rn+2 ... Rm+1]
+    
     struct Round {
         mapping (address => uint256) balances; // weekly user's lockup
         uint vestFrom; // [vestfrom -- MONTH -- releaseday]
