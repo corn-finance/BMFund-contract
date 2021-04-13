@@ -111,6 +111,9 @@ contract LPStaking is Ownable, ReentrancyGuard {
         
         // set new block reward
         BIMBlockReward = reward;
+        
+        // log
+        emit BlockRewardSet(msg.sender, reward);
     }
     
     /**
@@ -235,4 +238,5 @@ contract LPStaking is Ownable, ReentrancyGuard {
     event Deposit(address account, uint256 amount);
     event Withdraw(address account, uint256 amount);
     event BIMClaimed(address account, uint256 amount);
+    event BlockRewardSet(address account, uint256 amount);
 }

@@ -21,7 +21,7 @@ contract EHCStaking is Ownable, ReentrancyGuard {
     IEHCToken public EHCTokenContract; // the EHC token contract
     
     mapping (address => uint256) private _balances; // tracking staker's value
-    uint256 private _totalStaked; // track total staked value
+    uint256 private _totalStaked; // track total staked value 
     
     /**
      * @dev ETH Rewarding
@@ -231,6 +231,9 @@ contract EHCStaking is Ownable, ReentrancyGuard {
         
         // set new block reward
         BIMBlockReward = reward;
+        
+        // log
+        emit BlockRewardSet(msg.sender, reward);
     }
         
     /**
@@ -352,4 +355,6 @@ contract EHCStaking is Ownable, ReentrancyGuard {
     event Withdraw(address account, uint256 amount);
     event BIMClaimed(address account, uint256 amount);
     event EthersClaimed(address account, uint256 amount);
+    event BlockRewardSet(address account, uint256 amount);
+
 }
