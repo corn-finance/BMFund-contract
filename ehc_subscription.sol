@@ -118,6 +118,9 @@ contract EHCSubscription is Ownable {
             idx.prev = idx.lastest;
             idx.lastest = currentRound;
         }
+        
+        // log
+        emit Subscribed(msg.sender, r, amountUSDT);
     }
     
     /**
@@ -147,6 +150,9 @@ contract EHCSubscription is Ownable {
         
         // send back EHC
         EHCToken.safeTransfer(msg.sender, amount);
+        
+        // log
+        emit EHCClaimed(msg.sender, amount);
     }
     
     /**
@@ -167,6 +173,9 @@ contract EHCSubscription is Ownable {
         
         // send back
         USDTContract.safeTransfer(msg.sender, amount);
+        
+        // log
+        emit RefundClaimed(msg.sender, amount);
     }
         
     /**
@@ -279,7 +288,7 @@ contract EHCSubscription is Ownable {
     function checkRoundRefund(address account, int256 r) internal view returns(uint256 refund) {
         Round storage round = rounds[r];
         // refund USDT
-        if (!round.refundClaimed[account] && round.refundPerUSDT > 0) {
+        if (!round.refundClaimed[account]) {
             return round.refundPerUSDT.mul(round.balances[account])
                                         .div(SHARE_MULTIPLIER);
         }
@@ -327,4 +336,8 @@ contract EHCSubscription is Ownable {
      */
      
     event MintCapSet(address account, uint256 cap);
+    event Subscribed(address account, int256 r, uint256 amount);
+    event EHCClaimed(address account, uint256 amount);
+    event RefundClaimed(address account, uint256 amount);
+
 }
