@@ -210,17 +210,17 @@ contract BIMBuyBack is IBIMBuyBack {
             approvedToRouter = true;
         }
         
-        uint256 ethSwapIn = ethContract.balanceOf(address(this));
-        if (ethSwapIn == 0) {
+        uint256 ethAmountIn = ethContract.balanceOf(address(this));
+        if (ethAmountIn == 0) {
             return;
         }
         
         // check how many BIMs can be swapped out
-        uint [] memory amounts = router.getAmountsOut(ethSwapIn, amountsOutPath);
+        uint [] memory amounts = router.getAmountsOut(ethAmountIn, amountsOutPath);
         uint256 bimSwapOut = amounts[1];
         
         // swap tokens
-        router.swapTokensForExactTokens(bimSwapOut, ethSwapIn, amountsOutPath, address(this), block.timestamp.add(MAX_SWAP_LATENCY));
+        router.swapTokensForExactTokens(bimSwapOut, ethAmountIn, amountsOutPath, address(this), block.timestamp.add(MAX_SWAP_LATENCY));
         
         // check BIM balance again
         uint256 bimBalance = bimContract.balanceOf(address(this));
