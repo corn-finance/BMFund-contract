@@ -213,6 +213,7 @@ contract EHCSubscription is Ownable {
                 uint256 ehcToMint;
                 
                 // over subscribed, set refundPerUSDT
+                // note: totalUSDTS & capUSDTS can both be 0
                 if (round.totalUSDTS > capUSDTS) {
                     // set to: (totalUSDT - capUSDT) / totalUSDT
                     round.refundPerUSDT = round.totalUSDTS.sub(capUSDTS)
