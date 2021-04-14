@@ -135,7 +135,7 @@ contract EHCStaking is Ownable, ReentrancyGuard {
         uint unsettledShare = _accETHShares[_currentETHRound-1].sub(_accETHShares[lastSettledRound]);
         
         uint balanceDiff = ETHContract.balanceOf(address(this)).sub(_ethersUnclaimed); // received from nowhere, but not settled
-        uint undistributedEthers = ETHContract.balanceOf(address(EHCTokenContract)).mul(70).div(100); // still in EHCTokenContract
+        uint undistributedEthers = ETHContract.balanceOf(address(EHCTokenContract)).mul(70).div(100); // expected distribution in EHCTokenContract
         
         uint newShare;
         if (_totalStaked > 0) {
