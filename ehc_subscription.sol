@@ -37,6 +37,8 @@ contract EHCSubscription is Ownable {
 
         mapping (address => uint256) lastClaim;  // EHC last claim() date
         mapping (address => bool) refundClaimed; // USDT refunded mark
+        
+        uint numSubscribed; // record accounts subscribed;
     }
     
     /// @dev rounds indexing
@@ -62,6 +64,11 @@ contract EHCSubscription is Ownable {
 
     /// @dev contract confirmed USDTS
     uint256 public confirmedUSDTs;
+    
+    /// @dev accumualated susbscribed accounts
+    uint public accSubscribed;
+    /// @dev accumulated subscribed amountUSDT
+    uint public accUSDTSubscribed;
     
     /// @dev MINT_CAP
     uint256 public MINT_CAP = 25;
@@ -94,9 +101,17 @@ contract EHCSubscription is Ownable {
         // make sure round is currentRound
         require (currentRound <= r, "invalid round");
         require (currentRound == r, "round expired");
+        require (amountUSDT > 0, "amount 0");
+        
         // make sure we are still in subscription period
         Round storage round = rounds[r];
         require (!round.subEnded, "subscription ended");
+        
+        if (round.balances[msg.sender] == 0) {
+            round.numSubscribed++;
+            accSubscribed++;
+            accUSDTSubscribed += amountUSDT;
+        }
         
         // transfer USDT to this contract and finish bookkeeping.
         USDTContract.safeTransferFrom(msg.sender, address(this), amountUSDT);
