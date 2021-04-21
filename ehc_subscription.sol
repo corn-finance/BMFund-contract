@@ -52,6 +52,9 @@ contract EHCSubscription is Ownable {
     /// @dev settled EHC balance
     mapping (address => uint256) internal _ehcBalance; 
     
+    /// @dev accumulated EHC balance
+    mapping (address => uint256) internal _accEHCSubscription; 
+    
     /// @dev a struct to keep at most 2 round index for a user
     // 2 rounds before current round can be settled permanently.(all EHC released).
     struct RoundIndex {
@@ -123,7 +126,10 @@ contract EHCSubscription is Ownable {
             // idx.prev will be 2 rounds before current round
             // settle ANY unreleased EHC and refund to account balance
             settleRound(msg.sender, idx.prev);
-            
+                        
+            // accumulate historical EHC subscription when prev pop
+            _accEHCSubscription[msg.sender] += checkRoundEHCTotal(msg.sender, idx.prev);
+                                
             // make a shifting, by always keep idx.lastest to current round
             //
             // [prev, latest] <--- currentRound 
@@ -341,10 +347,30 @@ contract EHCSubscription is Ownable {
     }
     
     /**
+     * @dev check total EHC on round r
+     */
+    function checkRoundEHCTotal(address account, int256 r) internal view returns(uint256 release) {
+        Round storage round = rounds[r];
+        return MONTH.mul(round.ehcPerUSDTSecs)
+                        .mul(round.balances[account])
+                        .div(SHARE_MULTIPLIER);
+    }
+    
+    /**
      * @dev check round subscriptions
      */
     function checkRoundSubscription(address account, int256 r) external view returns(uint256) {
         return rounds[r].balances[account];
+    }
+    
+    /**
+     * @dev check historical subscriptions
+     */
+    function checkHistoricalSubscription(address account) external view returns(uint256) {
+        uint256 acc = _accEHCSubscription[account];
+        RoundIndex storage idx = _roundIndices[msg.sender];
+        acc += checkRoundEHCTotal(account, idx.prev);
+        acc += checkRoundEHCTotal(account, idx.lastest);
     }
     
     /**
